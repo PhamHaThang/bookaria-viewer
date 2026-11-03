@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+.env.local
+*.log
+
+# Local development certificates and private keys
+.certs/
+
+.playwright-cli

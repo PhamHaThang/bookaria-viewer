@@ -1,0 +1,779 @@
+<!doctype html>
+<html lang="vi">
+    <head>
+        <meta charset="UTF-8">
+        <link rel="icon" href="/favicon.svg?v=adaptive-1" type="image/svg+xml">
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+        <meta name="color-scheme" content="light dark">
+        <meta name="referrer" content="no-referrer">
+        <meta name="robots" content="noindex,nofollow">
+        <title>Bookaria — Đọc sách tương tác</title>
+        <script>
+        try {
+            const preference = localStorage.getItem('bookaria.theme');
+            document.documentElement.classList.toggle(
+                'dark',
+                preference === 'dark' ||
+                    (preference !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches),
+            );
+        } catch {
+            document.documentElement.classList.toggle(
+                'dark',
+                matchMedia('(prefers-color-scheme: dark)').matches,
+            );
+        }
+        </script>
+        <link rel="stylesheet" href="/src/style.css">
+    </head>
+    <body>
+        <a
+            class="fixed top-2 left-2 z-20 -translate-y-[200%] bg-reader-surface p-3 focus:translate-y-0"
+            href="#start"
+            >Đến nội dung sách</a
+        >
+        <main
+            id="main"
+            data-view="welcome"
+            data-ready="false"
+            data-loading="true"
+            class="group/reader relative isolate h-dvh min-h-0 w-full"
+        >
+            <div
+                id="reader-loading"
+                role="status"
+                aria-live="polite"
+                aria-busy="true"
+                data-loading-screen="full"
+                class="fixed inset-0 z-10 flex min-h-dvh w-full flex-col items-center justify-center gap-8 bg-reader-surface px-6 py-12 text-center"
+            >
+                <div aria-hidden="true" class="flex flex-col items-center gap-6">
+                    <img
+                        src="/brand/bookaria-symbol.svg"
+                        alt=""
+                        width="96"
+                        height="49"
+                        class="h-auto w-24 object-contain motion-safe:animate-[bookaria-loading-pulse_1.8s_ease-in-out_infinite] dark:invert"
+                    >
+                </div>
+                <p id="reader-loading-message" class="m-0 text-sm text-reader-muted">
+                    Đang mở Bookaria…
+                </p>
+            </div>
+            <div id="viewport" hidden class="absolute inset-0 overflow-hidden bg-reader-bg"></div>
+            <header
+                class="reader-header group-data-[entry=empty]/reader:hidden group-data-[view=camera-access]/reader:hidden pointer-events-none absolute top-[max(12px,env(safe-area-inset-top))] min-[601px]:top-[max(16px,env(safe-area-inset-top))] right-[max(12px,env(safe-area-inset-right))] left-[max(12px,env(safe-area-inset-left))] z-4 flex items-center justify-between gap-3 text-reader-ink min-[601px]:right-[max(20px,env(safe-area-inset-right))] min-[601px]:left-[max(20px,env(safe-area-inset-left))]"
+            >
+                <div
+                    class="reader-identity pointer-events-auto flex min-w-0 max-w-[min(55vw,440px)] items-center gap-1 rounded-2xl bg-reader-surface p-1 group-data-[view=ar]/reader:max-w-[min(440px,calc(100%-112px))]"
+                >
+                    <button
+                        id="home-link"
+                        class="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-xl hover:bg-reader-hover [&>img]:h-[22px] [&>img]:w-8"
+                        type="button"
+                        aria-label="Bookaria - Về màn bắt đầu"
+                        title="Về màn bắt đầu"
+                    >
+                        <img
+                            class="viewer-symbol object-contain dark:invert"
+                            src="/brand/bookaria-symbol.svg"
+                            alt="Bookaria"
+                            width="36"
+                            height="24"
+                        >
+                    </button>
+                    <button
+                        id="book-info"
+                        class="reader-button min-w-0 flex-col items-start gap-0.5 rounded-xl px-3 py-1 text-left"
+                        type="button"
+                        aria-haspopup="dialog"
+                    >
+                        <span
+                            id="reader-title"
+                            class="block max-w-full truncate text-sm font-semibold"
+                            >Bookaria</span
+                        ><span
+                            id="reader-context"
+                            class="block max-w-full truncate text-xs text-reader-muted"
+                            >Sách tương tác</span
+                        >
+                    </button>
+                </div>
+                <div
+                    id="controls"
+                    class="pointer-events-auto flex min-w-0 items-center gap-1 rounded-2xl bg-reader-surface p-1 group-data-[view=camera-access]/reader:hidden"
+                    hidden
+                >
+                    <span
+                        id="preview-badge"
+                        class="px-2 text-xs text-reader-muted max-[600px]:hidden group-data-[view=welcome]/reader:hidden"
+                        hidden
+                        >Bản xem trước</span
+                    >
+                    <button
+                        id="mute"
+                        class="reader-icon"
+                        type="button"
+                        aria-label="Tắt tiếng"
+                        aria-pressed="false"
+                        title="Tắt tiếng"
+                    >
+                        <i data-icon="Volume2"></i>
+                    </button>
+                    <details id="reader-menu" class="relative">
+                        <summary
+                            class="reader-icon"
+                            aria-label="Thêm tùy chọn"
+                            title="Thêm tùy chọn"
+                        >
+                            <i data-icon="Ellipsis"></i>
+                        </summary>
+                        <div
+                            class="absolute top-[calc(100%+8px)] right-0 w-60 rounded-[14px] border border-reader-line bg-reader-surface p-1.5 shadow-reader [&>button]:w-full [&>button]:justify-start [&>button]:rounded-lg"
+                        >
+                            <button
+                                id="reset"
+                                type="button"
+                                class="reader-button group-data-[view=welcome]/reader:hidden"
+                            >
+                                <i data-icon="Focus"></i>Đặt lại góc nhìn
+                            </button>
+                            <button
+                                id="restart"
+                                type="button"
+                                class="reader-button group-data-[view=welcome]/reader:hidden"
+                            >
+                                <i data-icon="RotateCcw"></i>Chạy lại trang
+                            </button>
+                            <button id="info-menu" type="button" class="reader-button">
+                                <i data-icon="Info"></i>Thông tin sách
+                            </button>
+                            <button
+                                id="report-menu"
+                                type="button"
+                                class="reader-button"
+                                aria-haspopup="dialog"
+                                hidden
+                            >
+                                <i data-icon="Flag"></i>Báo cáo
+                            </button>
+                            <button id="help-menu" type="button" class="reader-button">
+                                <i data-icon="CircleHelp"></i>Hướng dẫn đọc
+                            </button>
+                            <button id="theme" type="button" class="reader-button">
+                                <i data-icon="Moon"></i>Đổi sáng / tối
+                            </button>
+                        </div>
+                    </details>
+                </div>
+            </header>
+
+            <section
+                id="empty-entry"
+                class="flex h-full flex-col items-center justify-center gap-6 px-6 text-center"
+                aria-label="Bookaria"
+                hidden
+            >
+                <img
+                    src="/brand/bookaria-symbol.svg"
+                    alt="Bookaria"
+                    width="112"
+                    height="57"
+                    class="h-auto w-28 object-contain dark:invert"
+                >
+                <p class="max-w-[300px] text-sm leading-relaxed text-reader-muted text-balance">
+                    Mở liên kết sách hoặc quét QR trên bìa để bắt đầu.
+                </p>
+            </section>
+
+            <section
+                id="welcome"
+                class="flex h-full flex-col items-center overflow-y-auto overscroll-contain px-6 pt-[max(80px,calc(var(--reader-safe-top)+64px))] pb-[max(88px,calc(var(--reader-safe-bottom)+72px))] min-[768px]:px-10"
+                aria-labelledby="title"
+            >
+                <div
+                    id="welcome-layout"
+                    class="my-auto flex w-full max-w-[960px] shrink-0 flex-col items-center gap-5 min-[768px]:flex-row min-[768px]:justify-center min-[768px]:gap-[clamp(40px,7vw,88px)] [@media(max-height:600px)_and_(min-width:560px)]:flex-row [@media(max-height:600px)_and_(min-width:560px)]:gap-6"
+                >
+                    <div
+                        id="book-cover"
+                        class="relative grid h-(--cover-height) w-[calc(var(--cover-height)*0.75)] shrink-0 place-items-center overflow-hidden rounded-[6px_14px_14px_6px] border border-reader-line bg-white shadow-[0_12px_32px_#0000000d] [--cover-height:clamp(96px,24dvh,240px)] group-data-[ready=false]/reader:hidden min-[768px]:[--cover-height:clamp(180px,38dvh,420px)] [@media(max-height:600px)_and_(min-width:560px)]:[--cover-height:clamp(96px,calc(100dvh-184px),220px)]"
+                    >
+                        <img id="cover" alt="Bìa sách" hidden class="size-full object-contain">
+                        <img
+                            id="cover-fallback"
+                            class="viewer-symbol h-auto w-[45%] max-w-24 object-contain"
+                            src="/brand/bookaria-symbol.svg"
+                            alt=""
+                            width="84"
+                            height="46"
+                        >
+                    </div>
+                    <div
+                        id="welcome-details"
+                        class="min-w-0 w-full max-w-[440px] text-center min-[768px]:text-left group-data-[ready=false]/reader:text-center [@media(max-height:600px)_and_(min-width:560px)]:text-left"
+                    >
+                        <span id="welcome-kind" class="reader-muted mb-2 block"
+                            >Sách tương tác Bookaria</span
+                        >
+                        <h1
+                            id="title"
+                            class="mb-3 text-[clamp(24px,3.5vw,38px)] leading-tight font-semibold tracking-[-0.025em] wrap-anywhere text-balance"
+                        >
+                            Mỗi trang sách, một khám phá.
+                        </h1>
+                        <div
+                            class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 min-[768px]:justify-start group-data-[ready=false]/reader:justify-center [@media(max-height:600px)_and_(min-width:560px)]:justify-start"
+                        >
+                            <p id="subtitle" class="text-sm leading-relaxed text-reader-muted">
+                                Mở liên kết sách hoặc quét QR trên bìa để bắt đầu.
+                            </p>
+                            <p
+                                id="book-count"
+                                class="border-l border-reader-line pl-3 text-sm leading-relaxed text-reader-muted"
+                                hidden
+                            ></p>
+                        </div>
+                        <div
+                            id="welcome-actions"
+                            class="mt-5 flex flex-col gap-3 min-[768px]:flex-row min-[768px]:flex-wrap group-data-[ready=false]/reader:justify-center [&>button]:min-h-12 [&>button]:px-5 [@media(max-height:600px)_and_(min-width:560px)]:flex-row [@media(max-height:600px)_and_(min-width:560px)]:flex-wrap [@media(max-height:600px)_and_(min-width:560px)]:gap-2 [@media(max-height:600px)_and_(min-width:560px)]:[&>button]:min-h-11 [@media(max-height:600px)_and_(min-width:560px)]:[&>button]:px-4"
+                        >
+                            <button
+                                id="start"
+                                class="reader-button reader-primary"
+                                type="button"
+                                disabled
+                            >
+                                <i data-icon="BookOpen"></i><span>Bắt đầu đọc</span>
+                            </button>
+                            <button
+                                id="welcome-camera"
+                                class="reader-button reader-outline"
+                                type="button"
+                                hidden
+                            >
+                                <i data-icon="ScanLine"></i><span>Quét sách</span>
+                            </button>
+                        </div>
+                        <p
+                            id="welcome-hint"
+                            class="mt-3 text-xs leading-relaxed text-reader-muted"
+                            hidden
+                        ></p>
+                    </div>
+                </div>
+            </section>
+
+            <section
+                id="camera-access"
+                class="grid h-full place-items-center overflow-hidden px-6 pt-[max(24px,env(safe-area-inset-top))] pb-[max(88px,calc(env(safe-area-inset-bottom)+80px))] [@media(max-height:540px)_and_(min-width:560px)]:pt-4"
+                aria-labelledby="camera-access-title"
+                hidden
+            >
+                <div
+                    class="w-full max-w-[440px] [@media(max-height:540px)_and_(min-width:560px)]:grid [@media(max-height:540px)_and_(min-width:560px)]:max-w-[800px] [@media(max-height:540px)_and_(min-width:560px)]:grid-cols-2 [@media(max-height:540px)_and_(min-width:560px)]:items-center [@media(max-height:540px)_and_(min-width:560px)]:gap-6"
+                >
+                    <div class="text-center">
+                        <div
+                            id="camera-access-icon"
+                            class="mb-6 flex justify-center text-reader-ink [&>svg]:size-20 [&>svg]:stroke-[1.5] [@media(max-height:700px)]:mb-4 [@media(max-height:700px)]:[&>svg]:size-14 [@media(max-height:540px)_and_(min-width:560px)]:mb-3 [@media(max-height:540px)_and_(min-width:560px)]:[&>svg]:size-12"
+                        >
+                            <i data-icon="Camera"></i>
+                        </div>
+                        <h1
+                            id="camera-access-title"
+                            tabindex="-1"
+                            class="mb-3 text-2xl leading-tight font-semibold tracking-tight text-balance outline-none [@media(max-height:700px)]:text-[22px] [@media(max-height:540px)_and_(min-width:560px)]:text-xl"
+                        >
+                            Mở camera để quét sách
+                        </h1>
+                        <p
+                            id="camera-access-description"
+                            class="text-sm leading-relaxed text-reader-muted [@media(max-height:700px)]:text-[13px]"
+                        >
+                            Cho phép camera để nhận diện trang sách hoặc marker và hiển thị nội dung
+                            AR.
+                        </p>
+                    </div>
+                    <div
+                        class="mt-4 [@media(min-height:701px)]:mt-6 [@media(max-height:540px)_and_(min-width:560px)]:mt-0"
+                    >
+                        <div
+                            id="camera-access-options"
+                            class="mb-6 divide-y divide-reader-line border-y border-reader-line [@media(max-height:700px)]:mb-4"
+                        >
+                            <div
+                                class="flex items-center gap-3 py-3 [@media(max-height:540px)_and_(min-width:560px)]:py-2"
+                            >
+                                <i data-icon="Camera"></i>
+                                <p
+                                    class="flex flex-1 items-center justify-between gap-2 text-sm font-medium"
+                                >
+                                    Camera
+                                    <span class="text-xs font-normal text-reader-muted"
+                                        >Cần thiết</span
+                                    >
+                                </p>
+                            </div>
+                            <label
+                                class="flex cursor-pointer items-center gap-3 py-3 [@media(max-height:540px)_and_(min-width:560px)]:py-2"
+                                for="camera-access-sound"
+                            >
+                                <i data-icon="Volume2"></i>
+                                <span class="min-w-0 flex-1">
+                                    <span class="block text-sm font-medium">Bật âm thanh</span>
+                                    <span
+                                        class="mt-0.5 block text-xs leading-relaxed text-reader-muted"
+                                        >Không dùng micro.</span
+                                    >
+                                </span>
+                                <input
+                                    id="camera-access-sound"
+                                    class="size-5 shrink-0 accent-reader-primary"
+                                    type="checkbox"
+                                    checked
+                                >
+                            </label>
+                        </div>
+                        <div
+                            id="camera-access-help"
+                            class="mb-6 text-[13px] leading-relaxed text-reader-muted [@media(max-height:700px)]:mb-4"
+                            hidden
+                        >
+                            <ol class="list-decimal space-y-1 pl-5">
+                                <li>Mở quyền trang web trong trình duyệt.</li>
+                                <li>Cho phép Camera cho Bookaria.</li>
+                                <li>Quay lại và bấm Thử lại.</li>
+                            </ol>
+                        </div>
+                        <div
+                            id="camera-access-status"
+                            class="mb-4 text-center text-[13px] leading-relaxed text-reader-muted"
+                            role="status"
+                            aria-live="polite"
+                            hidden
+                        >
+                            Bạn có thể quay lại để chọn cách đọc khác.
+                        </div>
+                        <div class="flex flex-col gap-3 [@media(max-height:700px)]:gap-2">
+                            <button
+                                id="camera-access-allow"
+                                class="reader-button reader-primary min-h-12 w-full [@media(max-height:700px)]:min-h-11"
+                                type="button"
+                            >
+                                Cho phép camera
+                            </button>
+                            <button
+                                id="camera-access-back"
+                                class="reader-button reader-outline min-h-12 w-full [@media(max-height:700px)]:min-h-11"
+                                type="button"
+                            >
+                                Quay lại
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Spin toggle adapted from Alfie Jones (MIT), matching Studio: https://toggles.dev/toggles/spin -->
+            <button
+                id="welcome-theme"
+                class="reader-icon reader-outline absolute right-[max(24px,env(safe-area-inset-right))] bottom-[max(24px,env(safe-area-inset-bottom))] z-4 hidden shadow-reader group-data-[view=welcome]/reader:inline-flex group-data-[view=camera-access]/reader:inline-flex"
+                type="button"
+                aria-label="Chuyển sang giao diện tối"
+                title="Chuyển sang giao diện tối"
+                aria-pressed="false"
+            >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <defs>
+                        <clipPath id="welcome-theme-spin">
+                            <path
+                                d="M0 0h25a1 1 0 0010 10v14H0Z"
+                                class="motion-safe:transition-[d,translate] motion-safe:duration-400 dark:not-supports-[d:path('M0_0')]:-translate-x-3.25 dark:not-supports-[d:path('M0_0')]:translate-y-0.5 motion-safe:dark:delay-60 dark:[d:path('M0_2h13a1_1_0_0010_10v14H0Z')]"
+                            />
+                        </clipPath>
+                    </defs>
+                    <g stroke="currentColor" stroke-linecap="round">
+                        <circle
+                            cx="12"
+                            cy="12"
+                            r="5"
+                            fill="currentColor"
+                            clip-path="url(#welcome-theme-spin)"
+                            class="origin-center motion-safe:transition-transform motion-safe:duration-400 dark:scale-170"
+                        />
+                        <path
+                            d="M12 1.4v2.4M20.3 3.7l-2.5 2.5M22.6 12h-2.4M12 22.6v-2.4M1.4 12h2.4m16.5 8.3-2.5-2.5m-14.1 2.5 2.5-2.5M3.7 3.7l2.5 2.5"
+                            fill="none"
+                            stroke-width="2"
+                            stroke-linejoin="round"
+                            class="origin-center motion-safe:transition-transform motion-safe:delay-60 motion-safe:duration-400 dark:rotate-45 dark:scale-0 motion-safe:dark:delay-0"
+                        />
+                    </g>
+                </svg>
+            </button>
+
+            <div
+                id="reading-status"
+                class="status-panel pointer-events-none absolute bottom-[max(112px,calc(env(safe-area-inset-bottom)+100px))] left-1/2 z-3 flex max-w-[calc(100%-32px)] -translate-x-1/2 items-center justify-center gap-2 rounded-full bg-reader-surface px-4 py-2 text-reader-muted min-[601px]:bottom-[max(126px,calc(env(safe-area-inset-bottom)+110px))] group-data-[view=welcome]/reader:bottom-[max(32px,env(safe-area-inset-bottom))]"
+            >
+                <span
+                    id="busy-indicator"
+                    class="size-3.5 shrink-0 animate-spin rounded-full border-[1.5px] border-reader-line border-t-reader-ink motion-reduce:animate-none"
+                    aria-hidden="true"
+                    hidden
+                ></span>
+                <p
+                    id="status"
+                    role="status"
+                    aria-live="polite"
+                    class="text-center text-xs leading-relaxed"
+                >
+                    Đang chuẩn bị…
+                </p>
+            </div>
+            <div
+                id="feedback"
+                class="group-data-[view=welcome]/reader:bottom-[max(80px,calc(env(safe-area-inset-bottom)+68px))] group-data-[view=welcome]/reader:max-h-[min(160px,30dvh)] group-data-[view=welcome]/reader:overflow-y-auto absolute right-3 bottom-[max(120px,calc(env(safe-area-inset-bottom)+110px))] z-5 flex w-[calc(100%-24px)] items-start gap-3 rounded-2xl border border-reader-line bg-reader-surface p-4 shadow-reader min-[601px]:right-[max(20px,env(safe-area-inset-right))] min-[601px]:w-[min(400px,calc(100%-40px))]"
+                hidden
+            >
+                <p
+                    id="error"
+                    role="alert"
+                    class="min-w-0 flex-1 text-[13px] leading-relaxed wrap-anywhere"
+                ></p>
+                <div
+                    class="flex items-center gap-1 has-[#retry-media:not([hidden])]:flex-col-reverse has-[#retry-media:not([hidden])]:items-end"
+                >
+                    <button id="feedback-retry" type="button" hidden class="reader-button">
+                        Thử lại
+                    </button><button
+                        id="retry-media"
+                        type="button"
+                        hidden
+                        class="reader-button border-reader-line text-xs"
+                    >
+                        Chạm để bật âm thanh
+                    </button><button
+                        id="feedback-dismiss"
+                        class="reader-icon"
+                        type="button"
+                        aria-label="Đóng thông báo"
+                    >
+                        <i data-icon="X"></i>
+                    </button>
+                </div>
+            </div>
+            <button
+                id="retry"
+                class="reader-button absolute bottom-[max(24px,env(safe-area-inset-bottom))] left-1/2 z-4 -translate-x-1/2 reader-outline"
+                type="button"
+                hidden
+            >
+                <i data-icon="RefreshCw"></i>Thử tải lại
+            </button>
+
+            <div
+                id="scan-guide"
+                class="pointer-events-none absolute inset-0 z-2 grid place-items-center pb-[72px]"
+                hidden
+                aria-hidden="true"
+            >
+                <div
+                    id="scan-frame"
+                    class="scan-frame relative aspect-square w-(--scan-size)"
+                ></div>
+            </div>
+            <div
+                id="scan-help"
+                class="absolute right-[max(12px,env(safe-area-inset-right))] bottom-(--reader-bottom-inset) z-3 min-[601px]:right-[max(20px,env(safe-area-inset-right))]"
+                hidden
+            >
+                <button
+                    id="scan-help-button"
+                    class="reader-icon reader-surface"
+                    type="button"
+                    aria-label="Hướng dẫn quét"
+                    title="Hướng dẫn quét"
+                >
+                    <i data-icon="CircleHelp"></i>
+                </button>
+            </div>
+
+            <footer
+                id="reader-bottom"
+                class="reader-bottom pointer-events-none absolute right-[max(12px,env(safe-area-inset-right))] bottom-(--reader-bottom-inset) left-[max(12px,env(safe-area-inset-left))] z-3 grid grid-cols-[minmax(44px,1fr)_minmax(0,auto)_minmax(44px,1fr)] items-end gap-3 [&>*]:pointer-events-auto min-[601px]:right-[max(20px,env(safe-area-inset-right))] min-[601px]:left-[max(20px,env(safe-area-inset-left))] min-[601px]:gap-4"
+                hidden
+            >
+                <button
+                    id="contents"
+                    class="reader-icon reader-surface justify-self-start"
+                    type="button"
+                    aria-label="Mục lục"
+                    title="Mục lục"
+                    aria-haspopup="dialog"
+                >
+                    <i data-icon="LayoutGrid"></i>
+                </button>
+                <nav
+                    id="page-strip"
+                    class="page-strip flex min-w-0 max-w-[min(600px,calc(100vw-160px))] touch-pan-x items-center gap-2 overflow-x-auto overflow-y-hidden overscroll-contain rounded-[18px] p-2 [scrollbar-color:var(--reader-line)_transparent] [scrollbar-width:thin] min-[601px]:gap-2.5 min-[601px]:p-2.5 group-data-[view=ar]/reader:hidden reader-surface"
+                    aria-label="Các trang sách"
+                ></nav>
+                <button
+                    id="camera"
+                    class="reader-icon reader-surface justify-self-end group-data-[view=ar]/reader:hidden"
+                    type="button"
+                    aria-label="Quét sách in"
+                    title="Quét sách in"
+                >
+                    <i data-icon="Scan"></i>
+                </button>
+            </footer>
+            <div class="sr-only" hidden>
+                <button id="previous" type="button" class="reader-button">Trang trước</button
+                ><label for="pages">Trang đang xem</label><select id="pages"></select
+                ><button id="next" type="button" class="reader-button">Trang sau</button>
+            </div>
+
+            <dialog
+                id="contents-dialog"
+                class="reader-dialog w-[min(850px,calc(100vw-32px))]"
+                aria-labelledby="contents-title"
+            >
+                <div
+                    class="sticky top-0 z-1 flex items-center justify-between gap-4 border-b border-reader-line bg-reader-surface px-5 py-4 [&_p]:mt-1 [&_p]:text-xs"
+                >
+                    <div>
+                        <h2 id="contents-title">Mục lục</h2>
+                        <p id="contents-hint" class="reader-muted">Chọn một trang để đọc tiếp.</p>
+                    </div>
+                    <button
+                        class="reader-icon"
+                        type="button"
+                        data-close-dialog
+                        aria-label="Đóng mục lục"
+                    >
+                        <i data-icon="X"></i>
+                    </button>
+                </div>
+                <div
+                    id="page-grid"
+                    class="grid grid-cols-3 items-start gap-3 p-4 min-[601px]:grid-cols-[repeat(auto-fill,minmax(110px,1fr))] min-[601px]:gap-5 min-[601px]:p-6"
+                ></div>
+            </dialog>
+            <dialog id="info-dialog" class="reader-dialog" aria-labelledby="info-title">
+                <div
+                    class="sticky top-0 z-1 flex items-center justify-between gap-4 border-b border-reader-line bg-reader-surface px-5 py-4 [&_p]:mt-1 [&_p]:text-xs"
+                >
+                    <h2 id="info-title">Thông tin sách</h2>
+                    <button
+                        class="reader-icon"
+                        type="button"
+                        data-close-dialog
+                        aria-label="Đóng thông tin sách"
+                    >
+                        <i data-icon="X"></i>
+                    </button>
+                </div>
+                <div class="flex flex-col gap-5 p-5 leading-relaxed min-[601px]:p-6">
+                    <h3 id="info-book-title">Bookaria</h3>
+                    <p id="info-author" class="reader-muted"></p>
+                    <section id="publication-info" hidden class="flex flex-col items-start gap-4">
+                        <p id="publication-description"></p>
+                        <a
+                            id="published-pdf"
+                            class="reader-outline link-button reader-button"
+                            hidden
+                            href="/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            ><i data-icon="Download"></i>Bản in PDF</a
+                        >
+                    </section>
+                    <section id="credits-section" hidden aria-labelledby="credits-title">
+                        <h3 id="credits-title">Nguồn tài nguyên</h3>
+                        <ul id="credits"></ul>
+                    </section>
+                </div>
+            </dialog>
+            <dialog id="report-dialog" class="reader-dialog" aria-labelledby="report-title">
+                <div
+                    class="sticky top-0 z-1 flex items-center justify-between gap-4 border-b border-reader-line bg-reader-surface px-5 py-4"
+                >
+                    <h2 id="report-title">Báo cáo nội dung sách</h2>
+                    <button
+                        class="reader-icon"
+                        type="button"
+                        data-close-dialog
+                        aria-label="Đóng báo cáo"
+                    >
+                        <i data-icon="X"></i>
+                    </button>
+                </div>
+                <section id="report-section" class="flex flex-col gap-4 p-5 min-[601px]:p-6" hidden>
+                    <p class="reader-muted">Bạn không cần đăng nhập để gửi báo cáo.</p>
+                    <form
+                        id="report-form"
+                        class="flex flex-col gap-4 [&>label]:flex [&>label]:flex-col [&>label]:gap-2 [&>label]:text-sm"
+                    >
+                        <label for="report-reason"
+                            >Lý do<select id="report-reason" name="reason" required>
+                                <option value="">Chọn lý do</option>
+                                <option value="INAPPROPRIATE">Nội dung không phù hợp</option>
+                                <option value="COPYRIGHT">Vi phạm bản quyền</option>
+                                <option value="OTHER">Lý do khác</option>
+                            </select></label
+                        ><label for="report-page"
+                            >Trang liên quan<select id="report-page" name="pageId">
+                                <option value="">Toàn bộ sách</option>
+                            </select></label
+                        ><label for="report-note"
+                            >Mô tả thêm (không bắt buộc)<textarea
+                                id="report-note"
+                                name="note"
+                                rows="3"
+                            ></textarea></label
+                        ><button class="reader-button reader-primary" type="submit">
+                            Gửi báo cáo
+                        </button>
+                    </form>
+                    <p
+                        id="report-feedback"
+                        role="status"
+                        aria-live="polite"
+                        class="text-sm [&[role=alert]]:text-reader-danger"
+                    ></p>
+                </section>
+            </dialog>
+            <dialog
+                id="help-dialog"
+                class="reader-dialog max-h-[calc(100dvh-24px)] w-[min(680px,calc(100vw-24px))]"
+                aria-labelledby="help-title"
+            >
+                <div
+                    class="flex items-center justify-between gap-4 border-b border-reader-line bg-reader-surface px-5 py-3 [@media(max-height:540px)]:py-2"
+                >
+                    <h2 id="help-title" tabindex="-1" autofocus class="outline-none">
+                        Hướng dẫn đọc sách
+                    </h2>
+                    <button
+                        class="reader-icon"
+                        type="button"
+                        data-close-dialog
+                        aria-label="Đóng hướng dẫn"
+                    >
+                        <i data-icon="X"></i>
+                    </button>
+                </div>
+                <div
+                    class="grid gap-4 px-5 py-4 [@media(max-height:540px)_and_(min-width:560px)]:grid-cols-3 [@media(max-height:540px)]:py-3"
+                >
+                    <section
+                        class="flex items-start gap-3 [@media(max-height:540px)_and_(min-width:560px)]:flex-col [@media(max-height:540px)_and_(min-width:560px)]:gap-2"
+                    >
+                        <i data-icon="Hand"></i>
+                        <div>
+                            <h3 class="mb-1 text-sm">Chạm và điều khiển</h3>
+                            <div class="text-[13px] leading-relaxed text-reader-muted">
+                                <p>Chạm đối tượng để khám phá.</p>
+                                <p id="help-touch-controls" hidden>
+                                    Kéo để xoay, chụm hai ngón để thu phóng.
+                                </p>
+                                <div id="help-mouse-controls">
+                                    <p class="max-[600px]:hidden [@media(max-height:540px)]:hidden">
+                                        Kéo trái để xoay; chuột phải hoặc Space + kéo để dịch. Cuộn
+                                        hoặc kéo chuột giữa để thu phóng.
+                                    </p>
+                                    <p
+                                        class="hidden max-[600px]:block [@media(max-height:540px)]:block"
+                                    >
+                                        Trái xoay, phải dịch; cuộn thu phóng.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                    <section
+                        class="flex items-start gap-3 [@media(max-height:540px)_and_(min-width:560px)]:flex-col [@media(max-height:540px)_and_(min-width:560px)]:gap-2"
+                    >
+                        <i data-icon="ScanLine"></i>
+                        <div>
+                            <h3 class="mb-1 text-sm">Quét sách in</h3>
+                            <p class="text-[13px] leading-relaxed text-reader-muted">
+                                Giữ trọn trang hoặc marker trong camera. Đủ sáng và tránh lóa.
+                            </p>
+                        </div>
+                    </section>
+                    <section
+                        class="flex items-start gap-3 [@media(max-height:540px)_and_(min-width:560px)]:flex-col [@media(max-height:540px)_and_(min-width:560px)]:gap-2"
+                    >
+                        <i data-icon="BookOpen"></i>
+                        <div>
+                            <h3 class="mb-1 text-sm">Chuyển trang</h3>
+                            <p class="text-[13px] leading-relaxed text-reader-muted">
+                                Chọn ở thanh dưới hoặc mục lục. Khi quét, sách tự tìm trang.
+                            </p>
+                        </div>
+                    </section>
+                </div>
+                <div
+                    class="flex flex-col gap-2 border-t border-reader-line px-5 py-3 min-[560px]:flex-row min-[560px]:justify-end [@media(max-height:540px)]:py-2"
+                >
+                    <button
+                        id="read-fallback"
+                        class="reader-button reader-outline"
+                        type="button"
+                        hidden
+                    >
+                        Đọc trên màn hình
+                    </button>
+                    <button
+                        class="reader-button reader-primary min-w-28"
+                        type="button"
+                        data-close-dialog
+                    >
+                        Đã hiểu
+                    </button>
+                </div>
+            </dialog>
+            <section id="tap-section" class="sr-only" hidden aria-labelledby="tap-title">
+                <h2 id="tap-title">Chạm để khám phá</h2>
+                <div id="tap-objects"></div>
+            </section>
+            <section
+                id="rule-section"
+                class="absolute bottom-[110px] left-4 z-3 max-h-40 w-[min(300px,40vw)] overflow-auto rounded-xl bg-reader-surface p-2"
+                hidden
+            >
+                <h2>Chạy thử quy tắc</h2>
+                <div id="rules"></div>
+            </section>
+            <div
+                id="external-link"
+                class="absolute top-1/2 left-1/2 z-6 flex w-[min(420px,calc(100%-40px))] -translate-1/2 flex-wrap items-center gap-3 rounded-[20px] p-6 shadow-reader [&>p]:w-full [&>p]:text-sm reader-surface"
+                hidden
+            >
+                <p>Mở liên kết bên ngoài?</p>
+                <a
+                    id="link"
+                    class="reader-primary link-button reader-button"
+                    href="/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Mở liên kết</a
+                ><button id="dismiss-link" type="button" class="reader-button">Ở lại sách</button>
+            </div>
+            <details
+                id="logs"
+                class="absolute bottom-[110px] left-4 z-3 max-h-40 w-[min(300px,40vw)] overflow-auto rounded-xl bg-reader-surface p-2"
+                hidden
+            >
+                <summary>Nhật ký xem trước</summary>
+                <ol id="events"></ol>
+            </details>
+            <p id="camera-hint" hidden></p>
+        </main>
+        <script type="module" src="/src/main.ts"></script>
+    </body>
+</html>

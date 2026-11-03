@@ -1,0 +1,17 @@
+{
+    "mindar": "1.2.5",
+    "three": "0.161.0",
+    "files": {
+        "draco-0.161.0/draco_decoder.js": "8625489da79a805f4f2a7d511c3e52d8b4085608a9d2a4d5f4f9de5db0aea04f",
+        "draco-0.161.0/draco_decoder.wasm": "a680d927bed9cb864ddbd63521868891af2bfbe755092761b4837487618df8ac",
+        "draco-0.161.0/draco_wasm_wrapper.js": "8bb2952d2ba7d67e1414f8df819410cb0434a666be53f671fff75f68843d76f6",
+        "draco-0.161.0/LICENSE": "d3709b0fb4b8a94bbb1d02b8a2e484f258b0d9c5c5a01f940391f3fe662cd1a4",
+        "draco-0.161.0/README.md": "8b0bff6aa9c9115318d4c91206d379d4421c0d112526df6e6da9ab4c480e4645",
+        "draco-0.161.0/THREE-LICENSE": "4c40a1ef62450b857c3b2aaf294936304cd552d965fbcd9d32d4c5bcf4ba4454",
+        "mindar-1.2.5/controller-mGt1s8dJ.js": "98a90806c01077a46fc5a3daddc6441ac9d61c5b85b3cc09d3f0b2087d228713",
+        "mindar-1.2.5/LICENSE": "4f3aa5215ac0346a823170c9f9677da25c3e8bdb8243693118a3711e157d7fff",
+        "mindar-1.2.5/manifest.json": "b9ddf272bf7ab4a99dd0375303b3799515e9d9dd23421d5b4e7920096e26e5dc",
+        "mindar-1.2.5/mindar-image.prod.js": "a21eef9a98ed73aee589a219b35e580c50b501c6f50f88d6eed16dcef9b8dec2",
+        "mindar-1.2.5/ui-fBadYuor.js": "aed9538fec28fecfb0a564da48fbf053ac2549d3314746e67182d381b3a24c31"
+    }
+}

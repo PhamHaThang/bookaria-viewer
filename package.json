@@ -1,0 +1,40 @@
+{
+    "name": "bookaria-viewer",
+    "private": true,
+    "version": "1.0.0",
+    "type": "module",
+    "packageManager": "pnpm@10.34.6",
+    "engines": {
+        "node": ">=22.19.0"
+    },
+    "scripts": {
+        "dev": "vite",
+        "check": "node scripts/verify-vendor.mjs && biome check . && tsc --noEmit",
+        "test": "tsx --test tests/*.test.mjs",
+        "build": "tsc --noEmit && vite build",
+        "contract:sync": "node scripts/sync-contract.mjs",
+        "contract:check": "node scripts/sync-contract.mjs --check",
+        "contract:verify": "node scripts/sync-contract.mjs --verify",
+        "vendor:verify": "node scripts/verify-vendor.mjs"
+    },
+    "dependencies": {
+        "@fontsource/be-vietnam-pro": "5.3.0",
+        "@fontsource/bricolage-grotesque": "5.3.0",
+        "@fontsource/inter": "5.2.8",
+        "@fontsource/noto-serif": "5.3.0",
+        "lucide": "^1.66.0",
+        "three": "0.161.0",
+        "zod": "4.6.5"
+    },
+    "devDependencies": {
+        "@biomejs/biome": "2.5.15",
+        "@tailwindcss/vite": "4.3.3",
+        "@types/node": "24.19.2",
+        "@types/three": "0.161.2",
+        "@vitejs/plugin-basic-ssl": "2.3.0",
+        "tailwindcss": "4.3.3",
+        "tsx": "4.23.15",
+        "typescript": "6.0.3",
+        "vite": "8.3.4"
+    }
+}
