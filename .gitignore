@@ -8,3 +8,7 @@ dist
 .certs/
 
 .playwright-cli
+
+# Browser test artifacts
+playwright-report/
+test-results/

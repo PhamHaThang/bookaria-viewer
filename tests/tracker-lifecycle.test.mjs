@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { startTracking } from '../src/tracker/mindar.ts';
+import { TRACKING_OPTIONS } from '../src/tracker/tracking-config.ts';
 
 let scope;
 class FakeController {
@@ -166,10 +167,16 @@ test('retargeting reuses the camera/controller, waits for frame completion and f
         await waitFor(() => f.state.selected.length === 2);
         assert.equal(f.state.calls, 1);
         assert.equal(f.state.controllers.length, 1);
+        for (const [key, value] of Object.entries(TRACKING_OPTIONS))
+            assert.equal(f.state.controllers[0].options[key], value);
         assert.equal(f.state.tensors[0].disposed, true);
         session.prefer(0);
         await waitFor(() => f.state.selected.length === 3);
-        assert.equal(f.state.downloads.length, 2, 'Returning to an earlier group uses the cache');
+        assert.equal(
+            f.state.downloads.length,
+            2,
+            'Prefetch and returning to a group share the cache',
+        );
         abort.abort();
         session.stop();
         await waitFor(() => f.state.terminated === 1);

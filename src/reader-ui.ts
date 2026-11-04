@@ -71,12 +71,25 @@ export function createReaderUI(choose: (index: number) => void) {
     element('scan-frame').replaceChildren(scanner);
     const main = element('main');
     const menu = element<HTMLDetailsElement>('reader-menu');
+    let pageLoadingTimer: ReturnType<typeof setTimeout> | undefined;
+    function pageLoading(message?: string) {
+        clearTimeout(pageLoadingTimer);
+        element('page-loading').hidden = true;
+        element('viewport').setAttribute('aria-busy', String(message !== undefined));
+        if (message !== undefined) {
+            element('page-loading-message').textContent = message;
+            pageLoadingTimer = setTimeout(() => {
+                element('page-loading').hidden = false;
+            }, 250);
+        }
+    }
     function loading(message?: string) {
         const active = message !== undefined;
         main.dataset.loading = String(active);
         element('reader-loading').hidden = !active;
         element('reader-loading').setAttribute('aria-busy', String(active));
         if (active) {
+            pageLoading();
             element('reader-loading-message').textContent = message;
             menu.open = false;
             for (const modal of document.querySelectorAll<HTMLDialogElement>('dialog[open]'))
@@ -304,6 +317,7 @@ export function createReaderUI(choose: (index: number) => void) {
     return {
         scanEntry,
         loading,
+        pageLoading,
         empty() {
             loading();
             main.dataset.entry = 'empty';

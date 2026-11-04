@@ -10,6 +10,7 @@ import { facesCamera } from '../shared/scene/audio-kind';
 import { createBillboard } from '../shared/scene/billboard';
 import { pageImageSize } from '../shared/scene/page-image-fit';
 import { createTextVisual } from '../shared/scene/text-renderer';
+import type { AssetCache } from './asset-cache';
 import { InteractionRunner, sleep } from './InteractionRunner';
 
 type Hooks = {
@@ -44,6 +45,7 @@ export async function buildScene(
     assets: Record<string, ManifestAsset>,
     signal: AbortSignal,
     hooks: Hooks,
+    options: { background?: boolean; bytes?: AssetCache } = {},
 ) {
     const group = new THREE.Group();
     const nodes = new Map<string, Node>(),
@@ -104,11 +106,23 @@ export async function buildScene(
         draco.dispose();
         group.clear();
     }
-    async function texture(url: string) {
-        const bytes = await fetchBytes(url, signal, 20 * 1024 * 1024);
+    const readBytes = (url: string, limit?: number) =>
+        options.bytes ? options.bytes.get(url, signal, limit) : fetchBytes(url, signal, limit);
+    async function imageBitmap(url: string, flipY = false) {
+        const bytes = await readBytes(url, 20 * 1024 * 1024);
         signal.throwIfAborted();
-        const blob = new Blob([bytes]);
-        const bitmap = await createImageBitmap(blob, { imageOrientation: 'flipY' });
+        try {
+            return await createImageBitmap(new Blob([bytes]), {
+                imageOrientation: flipY ? 'flipY' : 'from-image',
+            });
+        } catch (error) {
+            if (!signal.aborted) options.bytes?.delete(url);
+            throw error;
+        }
+    }
+    async function texture(url: string) {
+        signal.throwIfAborted();
+        const bitmap = await imageBitmap(url, true);
         if (signal.aborted || disposed) {
             bitmap.close();
             signal.throwIfAborted();
@@ -119,6 +133,22 @@ export async function buildScene(
         result.needsUpdate = true;
         textures.add(result);
         return result;
+    }
+    async function textImage(url: string) {
+        const bitmap = await imageBitmap(url);
+        try {
+            signal.throwIfAborted();
+            const scale = Math.min(1, 1024 / bitmap.width, 640 / bitmap.height);
+            const image = document.createElement('canvas');
+            image.width = Math.max(1, Math.ceil(bitmap.width * scale));
+            image.height = Math.max(1, Math.ceil(bitmap.height * scale));
+            const context = image.getContext('2d');
+            if (!context) throw new Error('Không tạo được ảnh xem trước.');
+            context.drawImage(bitmap, 0, 0, image.width, image.height);
+            return image;
+        } finally {
+            bitmap.close();
+        }
     }
     const plane = (width: number, height: number, material: THREE.Material) =>
         new THREE.Mesh(new THREE.PlaneGeometry(width, height), material);
@@ -353,32 +383,34 @@ export async function buildScene(
         }
     }
     try {
-        const background = await texture(page.imageUrl);
-        signal.throwIfAborted();
-        const paper = plane(
-            1,
-            page.aspect,
-            new THREE.MeshBasicMaterial({
-                color: 0xffffff,
-                side: THREE.DoubleSide,
-                polygonOffset: true,
-                polygonOffsetFactor: 1,
-                polygonOffsetUnits: 1,
-            }),
-        );
-        paper.position.z = -0.003;
-        paper.name = 'page-background';
-        group.add(paper);
-        const bitmap = background.image as ImageBitmap;
-        const size = pageImageSize(bitmap.width, bitmap.height, page.aspect);
-        const paperImage = plane(
-            size.width,
-            size.height,
-            new THREE.MeshBasicMaterial({ map: background, side: THREE.DoubleSide }),
-        );
-        paperImage.position.copy(paper.position);
-        paperImage.name = 'page-background-image';
-        group.add(paperImage);
+        if (options.background !== false) {
+            const background = await texture(page.imageUrl);
+            signal.throwIfAborted();
+            const paper = plane(
+                1,
+                page.aspect,
+                new THREE.MeshBasicMaterial({
+                    color: 0xffffff,
+                    side: THREE.DoubleSide,
+                    polygonOffset: true,
+                    polygonOffsetFactor: 1,
+                    polygonOffsetUnits: 1,
+                }),
+            );
+            paper.position.z = -0.003;
+            paper.name = 'page-background';
+            group.add(paper);
+            const bitmap = background.image as ImageBitmap;
+            const size = pageImageSize(bitmap.width, bitmap.height, page.aspect);
+            const paperImage = plane(
+                size.width,
+                size.height,
+                new THREE.MeshBasicMaterial({ map: background, side: THREE.DoubleSide }),
+            );
+            paperImage.position.copy(paper.position);
+            paperImage.name = 'page-background-image';
+            group.add(paperImage);
+        }
         // Sequential loading bounds peak memory and makes cancellation deterministic.
         for (const spec of page.scene.objects) {
             signal.throwIfAborted();
@@ -397,8 +429,15 @@ export async function buildScene(
             if (spec.type === 'model') {
                 const asset = assets[spec.assetId];
                 if (asset?.type !== 'MODEL') throw new Error('Thiếu tài nguyên mô hình.');
-                const bytes = await fetchBytes(asset.url, signal);
-                const gltf = await loader.parseAsync(bytes, new URL('.', asset.url).href);
+                const bytes = await readBytes(asset.url);
+                // GLTFLoader r161 slices GLB chunks/bufferViews before Draco transfers them.
+                // The original cached buffer remains read-only and reusable by later pages.
+                const gltf = await loader
+                    .parseAsync(bytes, new URL('.', asset.url).href)
+                    .catch((error) => {
+                        if (!signal.aborted) options.bytes?.delete(asset.url);
+                        throw error;
+                    });
                 node.billboard.content.add(gltf.scene);
                 node.mixer = new THREE.AnimationMixer(gltf.scene);
                 node.clips = gltf.animations;
@@ -418,6 +457,7 @@ export async function buildScene(
                             ? assets[presentation.imageAssetId]?.url
                             : undefined,
                     signal,
+                    loadImage: options.bytes ? textImage : undefined,
                 });
                 node.billboard.content.add(visual.group);
                 node.textTap = visual.tap ?? visual.next;

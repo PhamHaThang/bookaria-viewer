@@ -1,6 +1,7 @@
 import { CameraAccess, cameraError } from './camera-access';
 import { createReaderUI, setMuteIcon } from './reader-ui';
 import { installReportForm } from './report-form';
+import { AssetCache } from './scene-core/asset-cache';
 import type { PageRuntime } from './scene-core/buildScene';
 import type { Stage } from './scene-core/Stage';
 import {
@@ -16,6 +17,7 @@ import { SlugSchema } from './shared/contracts/common.schema';
 import type { Manifest, ManifestPage } from './shared/contracts/manifest.schema';
 import { PreviewMessageSchema, RunMessageSchema, trustedMessage } from './shared/protocol';
 import { startReadingEvents } from './shared/reading-events';
+import { TrackingLoss } from './tracker/tracking-loss';
 
 const get = <T extends HTMLElement>(id: string) => {
     const element = document.getElementById(id);
@@ -71,6 +73,8 @@ let loading: AbortController | null = null,
     cameraGroup: number | null = null;
 let tracker: Awaited<ReturnType<typeof import('./tracker/mindar').startTracking>> | null = null;
 const cameraAccess = new CameraAccess();
+const trackingLoss = new TrackingLoss();
+const sceneBytes = new AssetCache();
 const retiring = new Set<PageRuntime>();
 const matrices = new Map<string, { world: number[]; dimensions: [number, number] }>();
 let cameraTask: Promise<void> | null = null,
@@ -101,6 +105,7 @@ function controls() {
     ui.navigation(index, mode === 'ar', tracked);
 }
 function clearCamera(keepPrepared = false) {
+    trackingLoss.cancel();
     if (!keepPrepared) cameraAccess.clear();
     if (lossTimer) clearTimeout(lossTimer);
     lossTimer = null;
@@ -133,11 +138,13 @@ function stop(message = 'Đã dừng xem. Bấm Bắt đầu để xem lại.') 
     get('external-link').hidden = true;
     controls();
     ui.loading();
+    ui.pageLoading();
     ui.view('welcome');
     status(message);
     reply('stopped');
 }
 function install(value: Book) {
+    sceneBytes.clear();
     book = value;
     index = 0;
     ui.ready(value);
@@ -208,6 +215,7 @@ function buttons(page: ManifestPage) {
     get('logs').hidden = !embedded;
 }
 function showTracked(world: number[], dimensions: [number, number], page: ManifestPage) {
+    trackingLoss.cancel();
     if (!runtime) return;
     stage?.track(targetToPageMatrix(world, ...dimensions, page));
     if (!tracked) {
@@ -218,6 +226,7 @@ function showTracked(world: number[], dimensions: [number, number], page: Manife
         if (runtimeStarted) runtime.resume();
         else {
             runtimeStarted = true;
+            stage?.revealAR();
             runtime.start();
         }
         ui.scan(true);
@@ -225,18 +234,25 @@ function showTracked(world: number[], dimensions: [number, number], page: Manife
         status(`Đã nhận diện trang ${index + 1}. Chạm để khám phá.`);
     }
 }
-function lostTarget() {
+function lostTarget(immediate = false) {
     if (!tracked) return;
-    tracked = false;
-    stage?.track(null);
-    ui.scan(false);
-    controls();
-    status('Đưa camera trở lại trang sách.');
-    if (lossTimer) clearTimeout(lossTimer);
-    const previous = runtime;
-    lossTimer = setTimeout(() => {
-        if (!tracked && previous === runtime) runtime?.suspend();
-    }, 600);
+    const confirm = () => {
+        if (!tracked) return;
+        tracked = false;
+        stage?.track(null);
+        ui.scan(false);
+        controls();
+        status('Đưa camera trở lại trang sách.');
+        if (lossTimer) clearTimeout(lossTimer);
+        const previous = runtime;
+        lossTimer = setTimeout(() => {
+            if (!tracked && previous === runtime) runtime?.suspend();
+        }, 600);
+    };
+    if (immediate) {
+        trackingLoss.cancel();
+        confirm();
+    } else trackingLoss.defer(confirm);
 }
 async function ensureCamera(page: ManifestPage) {
     if (!book || page.group === undefined || tracker) return;
@@ -288,7 +304,7 @@ async function ensureCamera(page: ManifestPage) {
                 },
                 searching: () => {
                     if (abort.signal.aborted) return;
-                    lostTarget();
+                    lostTarget(true);
                     matrices.clear();
                     cameraGroup = null;
                     if (!runtimeStarted) status('Đang tìm trang trong sách…');
@@ -320,13 +336,19 @@ async function ensureCamera(page: ManifestPage) {
 }
 async function activate(next: number) {
     if (!book?.pages[next]) return;
+    trackingLoss.cancel();
     const sequence = ++generation;
     loading?.abort();
     const abort = new AbortController();
     loading = abort;
-    ui.loading('Đang tải nội dung trang…');
+    if (mode === 'ar' && tracker) {
+        ui.loading();
+        ui.pageLoading(`Đang tải nội dung trang ${next + 1}…`);
+        status('');
+    } else ui.loading('Đang tải nội dung trang…');
     notice('');
     const old = runtime;
+    let prepared: PageRuntime | null = null;
     if (lossTimer) clearTimeout(lossTimer);
     lossTimer = null;
     runtimeStarted = false;
@@ -364,31 +386,44 @@ async function activate(next: number) {
         if (mode === 'ar') {
             await ensureCamera(page);
             abort.signal.throwIfAborted();
-            ui.loading('Đang tải nội dung trang…');
+            ui.loading();
+            ui.pageLoading(`Đang tải nội dung trang ${next + 1}…`);
         }
         if (mode === 'ar' && page.marker.mode === 'NONE') {
             clearCamera();
             mode = '3d';
             stage.setAR(null);
+            ui.loading('Đang tải nội dung trang…');
             notice('Trang này không có marker; đang xem 3D.');
         }
-        const created = await buildScene(page, book.assets, abort.signal, {
-            notice,
-            log,
-            tap: (objectId) =>
-                readingEvents?.record({ type: 'TAP', pageId: page.pageId, objectId }),
-            link: (url) => {
-                get<HTMLAnchorElement>('link').href = url;
-                get<HTMLAnchorElement>('link').textContent =
-                    `Mở liên kết: ${new URL(url).hostname}`;
-                get('external-link').hidden = false;
+        const created = await buildScene(
+            page,
+            book.assets,
+            abort.signal,
+            {
+                notice,
+                log,
+                tap: (objectId) =>
+                    readingEvents?.record({ type: 'TAP', pageId: page.pageId, objectId }),
+                link: (url) => {
+                    get<HTMLAnchorElement>('link').href = url;
+                    get<HTMLAnchorElement>('link').textContent =
+                        `Mở liên kết: ${new URL(url).hostname}`;
+                    get('external-link').hidden = false;
+                },
             },
-        });
+            { background: mode !== 'ar', bytes: sceneBytes },
+        );
+        prepared = created;
+        abort.signal.throwIfAborted();
+        if (mode === 'ar') await stage.prepare(created, page, abort.signal);
         if (sequence !== generation || abort.signal.aborted) {
             created.dispose();
+            prepared = null;
             return;
         }
         runtime = created;
+        prepared = null;
         stage.setRuntime(created, page);
         runtime.mute(muted);
         buttons(page);
@@ -414,9 +449,11 @@ async function activate(next: number) {
         );
         if (sequence !== generation || abort.signal.aborted) return;
         ui.loading();
+        ui.pageLoading();
         controls();
         reply('started');
     } catch (error) {
+        prepared?.dispose();
         if (sequence !== generation || abort.signal.aborted) return;
         stop('Chưa mở được nội dung. Bạn có thể thử lại hoặc chọn xem 3D.');
         notice(
@@ -591,7 +628,10 @@ viewport.addEventListener('stage-error', (event) => {
     stop('Đã dừng xem.');
     notice((event as CustomEvent<string>).detail);
 });
-window.addEventListener('pagehide', () => stop());
+window.addEventListener('pagehide', () => {
+    sceneBytes.clear();
+    stop();
+});
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
         if (stage) stop('Đã dừng khi chuyển sang ứng dụng/tab khác. Bấm Bắt đầu để xem tiếp.');
@@ -654,6 +694,7 @@ if (embedded) {
         disposeReport?.();
         disposeReport = null;
         stop(message);
+        sceneBytes.clear();
         book = null;
         get('main').dataset.ready = 'false';
         get<HTMLButtonElement>('start').disabled = true;
@@ -751,6 +792,7 @@ if (embedded) {
     let availabilityTimer: ReturnType<typeof setInterval> | null = null;
     function expire() {
         stop('Bản xem trước không còn khả dụng.');
+        sceneBytes.clear();
         book = null;
         get('main').dataset.ready = 'false';
         get<HTMLButtonElement>('start').disabled = true;
@@ -801,6 +843,7 @@ if (embedded) {
         } catch (error) {
             if (request.signal.aborted) return;
             stop('Chưa tải được bản xem trước.');
+            sceneBytes.clear();
             book = null;
             get('controls').hidden = true;
             notice(error instanceof Error ? error.message : 'Lỗi tải bản xem trước.');

@@ -1,6 +1,8 @@
 import { cameraError, requestCameraStream } from '../camera-access';
 import { fetchBytes } from '../shared/api';
 import { GroupSearch } from './group-search';
+import { TargetCache } from './target-cache';
+import { TRACKING_OPTIONS } from './tracking-config';
 
 type Update = { type: string; targetIndex?: number; worldMatrix?: number[] | null };
 interface Tensor {
@@ -20,6 +22,8 @@ interface Controller {
     dispose(): void;
     worker?: Worker;
     tracker?: TargetTracker;
+    /** Pinned MindAR 1.2.5 warmup state; never used as a recognized pose. */
+    trackingStates?: { isTracking: boolean }[];
 }
 export interface TrackingGroup {
     group: number;
@@ -123,7 +127,12 @@ export async function startTracking(
     let pauseReject: ((error: Error) => void) | undefined;
     let releaseTimer: ReturnType<typeof setTimeout> | undefined;
     let search: GroupSearch | undefined;
-    const bytes = new Map<number, ArrayBuffer>();
+    const bytes = new TargetCache(fetchBytes);
+    const prefetchNext = () => {
+        const next = search?.nextGroup();
+        const item = groups.find((item) => item.group === next);
+        if (item) bytes.prefetch(item.group, item.url);
+    };
     const projection = () => {
         const result = controller?.getProjectionMatrix().slice() ?? [];
         if (
@@ -159,7 +168,7 @@ export async function startTracking(
         if (processing) releaseTimer = setTimeout(release, 1500);
         else release();
         for (const track of stream?.getTracks() ?? []) track.stop();
-        bytes.clear();
+        bytes.stop();
         video.pause();
         video.removeEventListener('resize', resize);
         video.srcObject = null;
@@ -208,7 +217,7 @@ export async function startTracking(
         controller = new MindController({
             inputWidth,
             inputHeight,
-            maxTrack: 1,
+            ...TRACKING_OPTIONS,
             onUpdate: (data: Update) => {
                 if (data.type === 'processDone') {
                     if (stopped) {
@@ -222,6 +231,11 @@ export async function startTracking(
                         pauseResolve = undefined;
                         pauseReject = undefined;
                         resolve();
+                    } else if (current !== undefined) {
+                        search?.frame(
+                            current,
+                            controller?.trackingStates?.some((state) => state.isTracking) ?? false,
+                        );
                     }
                     return;
                 }
@@ -232,8 +246,10 @@ export async function startTracking(
                     data.targetIndex !== undefined &&
                     dimensions[data.targetIndex]
                 ) {
-                    if (data.worldMatrix) search?.recognized(current);
-                    else search?.lost(current);
+                    if (data.worldMatrix) {
+                        search?.recognized(current);
+                        prefetchNext();
+                    } else search?.lost(current);
                     hooks.update(
                         current,
                         data.targetIndex,
@@ -246,18 +262,9 @@ export async function startTracking(
         const select = async (group: number) => {
             const item = groups.find((item) => item.group === group);
             if (!item || stopped || !controller) return;
-            let buffer = bytes.get(group);
-            if (!buffer) buffer = await fetchBytes(item.url, signal, 10 * 1024 * 1024);
+            const buffer = await bytes.get(group, item.url);
             signal.throwIfAborted();
             if (stopped) return;
-            // A bounded compressed-data cache, never one camera/GPU tracker per group.
-            bytes.delete(group);
-            bytes.set(group, buffer);
-            while (
-                [...bytes.values()].reduce((sum, value) => sum + value.byteLength, 0) >
-                30 * 1024 * 1024
-            )
-                bytes.delete(bytes.keys().next().value as number);
             await pause();
             signal.throwIfAborted();
             if (stopped) return;
@@ -277,6 +284,7 @@ export async function startTracking(
             resize();
             processing = true;
             controller.processVideo(video);
+            prefetchNext();
         };
         search = new GroupSearch(
             groups.map((item) => item.group),

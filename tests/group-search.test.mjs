@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { GroupSearch } from '../src/tracker/group-search.ts';
+import { GroupSearch, SEARCH_TIMING } from '../src/tracker/group-search.ts';
 import { releaseTargets } from '../src/tracker/mindar.ts';
 
 function fixture(groups, select) {
@@ -8,6 +8,7 @@ function fixture(groups, select) {
     const calls = [],
         errors = [];
     let id = 0;
+    let clock = 0;
     const search = new GroupSearch(
         groups,
         async (group) => {
@@ -20,14 +21,17 @@ function fixture(groups, select) {
             return id;
         },
         (key) => pending.delete(key),
+        () => clock,
     );
     const flush = async () => {
         for (let n = 0; n < 12; n++) await Promise.resolve();
     };
-    const tick = async () => {
+    const tick = async (frames = 12, candidate = false) => {
         const item = pending.entries().next().value;
         assert.ok(item, 'A scan is scheduled');
         pending.delete(item[0]);
+        clock += item[1].ms;
+        for (let n = 0; n < frames; n++) search.frame(calls.at(-1), candidate);
         item[1].fn();
         await flush();
     };
@@ -73,7 +77,7 @@ test('manual page preference serializes switches and stop discards pending selec
     await f.flush();
     assert.deepEqual(f.calls, [0, 2]);
     f.search.prefer(2);
-    assert.equal([...f.pending.values()][0].ms, 6500);
+    assert.equal([...f.pending.values()][0].ms, SEARCH_TIMING.preferredMs);
     f.search.stop();
     f.search.prefer(1);
     await f.flush();
@@ -122,4 +126,55 @@ test('target cleanup releases each owned tensor once and leaves unrelated detect
     });
     assert.equal(releases, 2);
     releaseTargets(undefined);
+});
+
+test('empty groups advance after enough frames instead of a fixed 3.5 second delay', async () => {
+    const f = fixture([0, 1]);
+    await f.search.start();
+    assert.equal([...f.pending.values()][0].ms, SEARCH_TIMING.minScanMs);
+    await f.tick();
+    assert.deepEqual(f.calls, [0, 1]);
+    f.search.stop();
+});
+
+test('slow tracking gets enough completed frames and stuck tracking eventually advances', async () => {
+    const f = fixture([0, 1]);
+    await f.search.start();
+    await f.tick(2);
+    assert.deepEqual(f.calls, [0]);
+    await f.tick(9);
+    assert.deepEqual(f.calls, [0]);
+    await f.tick(1);
+    assert.deepEqual(f.calls, [0, 1]);
+    for (let i = 0; i < 40 && f.calls.length === 2; i++) await f.tick(0);
+    assert.deepEqual(f.calls, [0, 1, 0]);
+    f.search.stop();
+});
+
+test('candidate warmup is protected, stale frame events are ignored, and same-group preference keeps the lock', async () => {
+    const f = fixture([0, 1]);
+    await f.search.start();
+    await f.tick(12, true);
+    assert.deepEqual(f.calls, [0], 'Do not leave while MindAR is warming up a candidate');
+    f.search.frame(1, false);
+    await f.tick(1, true);
+    assert.deepEqual(f.calls, [0]);
+    f.search.recognized(0);
+    f.search.prefer(0);
+    assert.equal(f.pending.size, 0, 'Selecting a page in a visible group must keep tracking');
+    assert.equal(f.search.nextGroup(), 1);
+    f.search.stop();
+});
+
+test('a failed switch cannot accept late poses from the previous group', async () => {
+    const f = fixture([0, 1, 2], (group) => {
+        if (group === 1) throw Error('invalid group');
+    });
+    await f.search.start();
+    await f.tick();
+    f.search.recognized(0);
+    assert.equal(f.pending.size, 1);
+    await f.tick();
+    assert.deepEqual(f.calls, [0, 1, 2]);
+    f.search.stop();
 });

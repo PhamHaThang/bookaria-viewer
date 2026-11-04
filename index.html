@@ -60,6 +60,16 @@
                     Đang mở Bookaria…
                 </p>
             </div>
+            <div
+                id="page-loading"
+                hidden
+                role="status"
+                aria-live="polite"
+                class="pointer-events-none absolute top-[max(86px,calc(env(safe-area-inset-top)+76px))] left-1/2 z-5 flex w-max max-w-[calc(100%-32px)] -translate-x-1/2 items-center gap-2 rounded-xl border border-reader-line bg-reader-surface/95 px-3 py-2 text-xs text-reader-ink shadow-reader"
+            >
+                <span aria-hidden="true" class="size-3.5 shrink-0 rounded-full border-2 border-reader-muted/30 border-t-reader-ink motion-safe:animate-spin"></span>
+                <span id="page-loading-message" class="min-w-0 truncate">Đang tải nội dung trang…</span>
+            </div>
             <div id="viewport" hidden class="absolute inset-0 overflow-hidden bg-reader-bg"></div>
             <header
                 class="reader-header group-data-[entry=empty]/reader:hidden group-data-[view=camera-access]/reader:hidden pointer-events-none absolute top-[max(12px,env(safe-area-inset-top))] min-[601px]:top-[max(16px,env(safe-area-inset-top))] right-[max(12px,env(safe-area-inset-right))] left-[max(12px,env(safe-area-inset-left))] z-4 flex items-center justify-between gap-3 text-reader-ink min-[601px]:right-[max(20px,env(safe-area-inset-right))] min-[601px]:left-[max(20px,env(safe-area-inset-left))]"
