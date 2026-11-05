@@ -25,6 +25,15 @@
     --color-reader-primary: var(--reader-primary);
     --color-reader-on-primary: var(--reader-on-primary);
     --color-reader-danger: var(--reader-danger);
+    /* Scene prompts share semantic class names with Studio. */
+    --color-surface: var(--reader-surface);
+    --color-foreground: var(--reader-ink);
+    --color-muted-foreground: var(--reader-muted);
+    --color-border: var(--reader-line);
+    --color-primary: var(--reader-primary);
+    --color-primary-foreground: var(--reader-on-primary);
+    --color-hover: var(--reader-hover);
+    --color-destructive: var(--reader-danger);
     --shadow-reader: var(--reader-shadow);
 }
 @layer base {

@@ -4,6 +4,8 @@ import { installReportForm } from './report-form';
 import { AssetCache } from './scene-core/asset-cache';
 import type { PageRuntime } from './scene-core/buildScene';
 import type { Stage } from './scene-core/Stage';
+import { askWorkflowQuestion } from './scene-core/WorkflowPrompt';
+import { WorkflowState } from './scene-core/WorkflowState';
 import {
     BookUnavailableError,
     loadPreview,
@@ -15,6 +17,7 @@ import {
 } from './shared/api';
 import { SlugSchema } from './shared/contracts/common.schema';
 import type { Manifest, ManifestPage } from './shared/contracts/manifest.schema';
+import type { WorkflowNavigation } from './shared/contracts/scene.schema';
 import { PreviewMessageSchema, RunMessageSchema, trustedMessage } from './shared/protocol';
 import { startReadingEvents } from './shared/reading-events';
 import { TrackingLoss } from './tracker/tracking-loss';
@@ -27,6 +30,7 @@ const get = <T extends HTMLElement>(id: string) => {
 const viewport = get<HTMLDivElement>('viewport'),
     select = get<HTMLSelectElement>('pages');
 const ui = createReaderUI((next) => {
+    automaticHops = 0;
     if (!book?.pages[next]) return;
     if (mode === 'ar') {
         const page = book.pages[next];
@@ -59,7 +63,10 @@ const reply = (state: string, requestId?: number) => {
             parentOrigin,
         );
 };
-type Book = Pick<Manifest, 'title' | 'pages' | 'assets' | 'targetGroups' | 'credits'>;
+type Book = Pick<Manifest, 'title' | 'pages' | 'assets' | 'targetGroups' | 'credits'> &
+    Partial<Pick<Manifest, 'bookId' | 'version' | 'workflowVariables'>>;
+let progress = new WorkflowState();
+let automaticHops = 0;
 let book: Book | null = null,
     index = 0,
     mode: '3d' | 'ar' = '3d',
@@ -146,6 +153,13 @@ function stop(message = 'Đã dừng xem. Bấm Bắt đầu để xem lại.') 
 function install(value: Book) {
     sceneBytes.clear();
     book = value;
+    progress = new WorkflowState(
+        publicSlug && value.bookId
+            ? `bookaria:progress:v1:${value.bookId}:${value.version || 1}`
+            : undefined,
+        value.workflowVariables || [],
+    );
+    automaticHops = 0;
     index = 0;
     ui.ready(value);
     get('title').textContent = value.title;
@@ -229,6 +243,7 @@ function showTracked(world: number[], dimensions: [number, number], page: Manife
             stage?.revealAR();
             runtime.start();
         }
+        runtime.markerFound();
         ui.scan(true);
         controls();
         status(`Đã nhận diện trang ${index + 1}. Chạm để khám phá.`);
@@ -239,6 +254,7 @@ function lostTarget(immediate = false) {
     const confirm = () => {
         if (!tracked) return;
         tracked = false;
+        runtime?.markerLost();
         stage?.track(null);
         ui.scan(false);
         controls();
@@ -403,8 +419,21 @@ async function activate(next: number) {
             {
                 notice,
                 log,
-                tap: (objectId) =>
-                    readingEvents?.record({ type: 'TAP', pageId: page.pageId, objectId }),
+                state: progress,
+                question: async (question, signal) => {
+                    const answer = await askWorkflowQuestion(question, signal);
+                    if (answer !== null) automaticHops = 0;
+                    return answer;
+                },
+                navigate: (navigation) =>
+                    queueMicrotask(() => {
+                        if (!abort.signal.aborted && sequence === generation)
+                            workflowNavigate(navigation);
+                    }),
+                tap: (objectId) => {
+                    automaticHops = 0;
+                    readingEvents?.record({ type: 'TAP', pageId: page.pageId, objectId });
+                },
                 link: (url) => {
                     get<HTMLAnchorElement>('link').href = url;
                     get<HTMLAnchorElement>('link').textContent =
@@ -466,7 +495,44 @@ async function activate(next: number) {
         reply('error');
     }
 }
+function workflowNavigate(navigation: WorkflowNavigation) {
+    if (!book) return;
+    if (++automaticHops > 8) {
+        notice('Luồng đang chuyển trang liên tục. Chọn trang để tiếp tục.');
+        return;
+    }
+    if (navigation.target === 'end') {
+        stop('');
+        notice(navigation.message || 'Bạn đã hoàn thành chuyến khám phá!');
+        return;
+    }
+    const next =
+        navigation.target === 'next'
+            ? index + 1
+            : navigation.target === 'previous'
+              ? index - 1
+              : book.pages.findIndex((page) => page.pageId === navigation.pageId);
+    if (next === index) {
+        notice('Bạn đang ở trang được chọn.');
+        return;
+    }
+    if (!book.pages[next]) {
+        notice('Không có trang tiếp theo ở hướng này.');
+        return;
+    }
+    if (mode === 'ar') {
+        const page = book.pages[next];
+        if (page.marker.mode !== 'NONE') {
+            if (page.group !== undefined) tracker?.prefer(page.group);
+            status(`Hướng camera vào trang ${next + 1}${page.title ? `: ${page.title}` : ''}.`);
+            notice(`Tiếp tục bằng cách quét trang ${next + 1}.`);
+            return;
+        }
+    }
+    void activate(next);
+}
 function startReading() {
+    automaticHops = 0;
     if (!book) return;
     clearCamera();
     mode = '3d';
