@@ -425,7 +425,7 @@
 
             <div
                 id="reading-status"
-                class="status-panel pointer-events-none absolute bottom-[max(112px,calc(env(safe-area-inset-bottom)+100px))] left-1/2 z-3 flex max-w-[calc(100%-32px)] -translate-x-1/2 items-center justify-center gap-2 rounded-full bg-reader-surface px-4 py-2 text-reader-muted min-[601px]:bottom-[max(126px,calc(env(safe-area-inset-bottom)+110px))] group-data-[view=welcome]/reader:bottom-[max(32px,env(safe-area-inset-bottom))]"
+                class="status-panel pointer-events-none absolute bottom-[max(120px,calc(env(safe-area-inset-bottom)+112px))] left-1/2 z-3 flex w-max max-w-[min(360px,calc(100%-32px))] -translate-x-1/2 items-center justify-center gap-2 rounded-xl border border-reader-line bg-reader-surface px-4 py-2 text-reader-muted shadow-sm min-[601px]:bottom-[max(126px,calc(env(safe-area-inset-bottom)+110px))] group-data-[view=welcome]/reader:bottom-[max(32px,env(safe-area-inset-bottom))]"
             >
                 <span
                     id="busy-indicator"
@@ -437,7 +437,7 @@
                     id="status"
                     role="status"
                     aria-live="polite"
-                    class="text-center text-xs leading-relaxed"
+                    class="text-center text-xs leading-relaxed text-balance"
                 >
                     Đang chuẩn bị…
                 </p>
@@ -517,7 +517,7 @@
             >
                 <button
                     id="contents"
-                    class="reader-icon reader-surface justify-self-start"
+                    class="reader-icon reader-surface col-start-1 justify-self-start"
                     type="button"
                     aria-label="Mục lục"
                     title="Mục lục"
@@ -527,12 +527,12 @@
                 </button>
                 <nav
                     id="page-strip"
-                    class="page-strip flex min-w-0 max-w-[min(600px,calc(100vw-160px))] touch-pan-x items-center gap-2 overflow-x-auto overflow-y-hidden overscroll-contain rounded-[18px] p-2 [scrollbar-color:var(--reader-line)_transparent] [scrollbar-width:thin] min-[601px]:gap-2.5 min-[601px]:p-2.5 group-data-[view=ar]/reader:hidden reader-surface"
+                    class="page-strip col-start-2 flex min-w-0 max-[600px]:hidden pointer-coarse:hidden max-w-[min(600px,calc(100vw-160px))] touch-pan-x items-center gap-2 overflow-x-auto overflow-y-hidden overscroll-contain rounded-[18px] p-2 [scrollbar-color:var(--reader-line)_transparent] [scrollbar-width:thin] min-[601px]:gap-2.5 min-[601px]:p-2.5 group-data-[view=ar]/reader:hidden reader-surface"
                     aria-label="Các trang sách"
                 ></nav>
                 <button
                     id="camera"
-                    class="reader-icon reader-surface justify-self-end group-data-[view=ar]/reader:hidden"
+                    class="reader-icon reader-surface col-start-3 justify-self-end group-data-[view=ar]/reader:hidden"
                     type="button"
                     aria-label="Quét sách in"
                     title="Quét sách in"

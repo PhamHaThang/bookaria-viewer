@@ -470,7 +470,9 @@ async function activate(next: number) {
             stage.setAR(null);
             runtimeStarted = true;
             runtime.start();
-            status('Chạm để khám phá. Kéo để xoay, chụm hai ngón để thu phóng.');
+            ui.readingHint(
+                [...(runtime.modelControls?.entries.values() || [])].some((entry) => entry.enabled),
+            );
         }
         // Let the render loop draw the prepared scene before revealing it.
         await new Promise<void>((resolve) =>

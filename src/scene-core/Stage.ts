@@ -124,6 +124,10 @@ export class Stage {
         this.nextVisibilityCheck = 0;
         if (runtime) {
             this.anchor.add(runtime.group);
+            runtime.attachControls(
+                this.renderer.domElement.parentElement || document.body,
+                this.renderer.domElement,
+            );
             setPageBackgroundVisibility(runtime.group, !this.arProjection);
         }
         if (page) {

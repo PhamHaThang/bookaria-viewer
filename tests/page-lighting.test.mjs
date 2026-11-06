@@ -42,17 +42,24 @@ test('Viewer applies the page preset when switching runtime and resets it for ne
     const { Stage } = await import('../src/scene-core/Stage.ts');
     const lighting = createPageLighting(),
         anchor = new Group();
-    const fake = { lighting, anchor, runtime: null, arProjection: null, resetView() {} };
+    const fake = {
+        lighting,
+        anchor,
+        runtime: null,
+        arProjection: null,
+        renderer: { domElement: { parentElement: {} } },
+        resetView() {},
+    };
     const group = new Group();
     Stage.prototype.setRuntime.call(
         fake,
-        { group },
+        { group, attachControls() {} },
         { aspect: 1.4, settings: { lighting: 'warm' } },
     );
     assert.equal(lighting.key.color.getHex(), 0xffe2bc);
     Stage.prototype.setRuntime.call(
         fake,
-        { group: new Group() },
+        { group: new Group(), attachControls() {} },
         { aspect: 1.2, settings: { lighting: 'neutral' } },
     );
     assert.equal(lighting.key.color.getHex(), 0xffffff);

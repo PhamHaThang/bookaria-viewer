@@ -167,6 +167,11 @@
 [data-view="ar"][data-tracking="found"] .status-panel {
     @apply top-auto bottom-(--reader-bottom-inset) max-w-[calc(100%-144px)] rounded-full;
 }
+@media (pointer: coarse) {
+    [data-view="ar"][data-tracking="found"]:has([data-model-controls]:not([hidden])) .status-panel {
+        bottom: max(120px, calc(env(safe-area-inset-bottom) + 112px));
+    }
+}
 .scan-outline path {
     @apply stroke-reader-primary;
     stroke-linecap: round;

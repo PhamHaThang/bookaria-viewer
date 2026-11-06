@@ -101,6 +101,17 @@ export function createReaderUI(choose: (index: number) => void) {
     let lastHighlighted = -1;
     let view: 'welcome' | 'read' | 'ar' | 'camera-access' = 'welcome';
     let statusTimer: ReturnType<typeof setTimeout> | undefined;
+    let introductoryHint = false;
+    element('viewport').addEventListener(
+        'pointerdown',
+        () => {
+            if (view !== 'read' || !introductoryHint) return;
+            clearTimeout(statusTimer);
+            introductoryHint = false;
+            element('reading-status').hidden = true;
+        },
+        { capture: true },
+    );
     function updateContext() {
         element('reader-context').textContent =
             view === 'ar'
@@ -461,7 +472,21 @@ export function createReaderUI(choose: (index: number) => void) {
             element('scan-help').hidden = view !== 'ar';
             updateContext();
         },
+        readingHint(hasModelControls: boolean) {
+            const touch = matchMedia('(pointer: coarse)').matches;
+            this.status(
+                hasModelControls
+                    ? touch
+                        ? 'Kéo joystick để di chuyển, chạm để tương tác.'
+                        : 'Dùng WASD hoặc phím mũi tên để di chuyển mô hình.'
+                    : touch
+                      ? 'Chạm để tương tác. Kéo để xoay, chụm để thu phóng.'
+                      : 'Nhấp để tương tác. Kéo để xoay, cuộn để thu phóng.',
+            );
+            introductoryHint = true;
+        },
         status(message: string, options?: { persistent?: boolean }) {
+            introductoryHint = false;
             clearTimeout(statusTimer);
             element('status').textContent = message;
             element('reading-status').hidden = !message;
@@ -474,6 +499,7 @@ export function createReaderUI(choose: (index: number) => void) {
             )
                 statusTimer = setTimeout(() => {
                     element('reading-status').hidden = true;
+                    introductoryHint = false;
                 }, 4000);
         },
         notice(message: string) {
