@@ -25,6 +25,19 @@
     --color-reader-primary: var(--reader-primary);
     --color-reader-on-primary: var(--reader-on-primary);
     --color-reader-danger: var(--reader-danger);
+    /* Scene prompts share semantic class names with Studio. */
+    --color-surface: var(--reader-surface);
+    --color-foreground: var(--reader-ink);
+    --color-muted-foreground: var(--reader-muted);
+    --color-border: var(--reader-line);
+    --color-primary: var(--reader-primary);
+    --color-primary-foreground: var(--reader-on-primary);
+    --color-hover: var(--reader-hover);
+    --color-destructive: var(--reader-danger);
+    --color-success: var(--reader-success-bg);
+    --color-success-foreground: var(--reader-success);
+    --color-danger: var(--reader-danger-bg);
+    --color-danger-foreground: var(--reader-danger);
     --shadow-reader: var(--reader-shadow);
 }
 @layer base {
@@ -42,6 +55,8 @@
         --reader-hover: #f0f0f3;
         --reader-primary: #000;
         --reader-on-primary: #fff;
+        --reader-success: var(--status-success-text);
+        --reader-success-bg: var(--status-success-bg);
         --reader-danger: #b42318;
         --reader-danger-bg: #fff0ef;
         --reader-shadow: 0 8px 28px #0000000f;
@@ -59,6 +74,8 @@
         --reader-hover: #292a2e;
         --reader-primary: #fff;
         --reader-on-primary: #111113;
+        --reader-success: #74daa2;
+        --reader-success-bg: #142d20;
         --reader-danger: #ffb3b7;
         --reader-danger-bg: #391b1e;
         --reader-shadow: 0 8px 28px #00000030;
@@ -149,6 +166,11 @@
 }
 [data-view="ar"][data-tracking="found"] .status-panel {
     @apply top-auto bottom-(--reader-bottom-inset) max-w-[calc(100%-144px)] rounded-full;
+}
+@media (pointer: coarse) {
+    [data-view="ar"][data-tracking="found"]:has([data-model-controls]:not([hidden])) .status-panel {
+        bottom: max(120px, calc(env(safe-area-inset-bottom) + 112px));
+    }
 }
 .scan-outline path {
     @apply stroke-reader-primary;

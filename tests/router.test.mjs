@@ -133,3 +133,47 @@ test('router executes route handlers and cancels previous executions on navigati
     assert.equal(handledPage, '2');
     assert.equal(abortedPrevious, true);
 });
+
+test('router supports beforeEach guards and afterEach hooks', async () => {
+    const router = new Router();
+    const calls = [];
+
+    router.register({
+        id: 'home',
+        pattern: '/',
+        handler: () => {
+            calls.push('handler:home');
+        },
+    });
+
+    router.register({
+        id: 'blocked',
+        pattern: '/blocked',
+        handler: () => {
+            calls.push('handler:blocked');
+        },
+    });
+
+    router.beforeEach((to) => {
+        calls.push(`before:${to.pathname}`);
+        if (to.pathname === '/blocked') {
+            return false;
+        }
+    });
+
+    router.afterEach((to) => {
+        calls.push(`after:${to.pathname}`);
+    });
+
+    globalThis.window = {
+        history: { pushState: () => {}, replaceState: () => {} },
+        location: { origin: 'http://localhost:5174', href: 'http://localhost:5174/' },
+    };
+
+    await router.navigate('/');
+    assert.deepEqual(calls, ['before:/', 'handler:home', 'after:/']);
+
+    calls.length = 0;
+    await router.navigate('/blocked');
+    assert.deepEqual(calls, ['before:/blocked']);
+});

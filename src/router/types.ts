@@ -16,9 +16,15 @@ export interface RouteDefinition {
     handler: RouteHandler;
 }
 
+export type NavigationGuard = (
+    to: RouteMatch,
+    from: RouteMatch | null,
+) => Promise<boolean | string | undefined> | boolean | string | undefined;
+
+export type AfterNavigationHook = (to: RouteMatch, from: RouteMatch | null) => void;
+
 export interface NavigateOptions {
     replace?: boolean;
     state?: unknown;
     trigger?: boolean;
 }
-

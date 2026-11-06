@@ -71,12 +71,25 @@ export function createReaderUI(choose: (index: number) => void) {
     element('scan-frame').replaceChildren(scanner);
     const main = element('main');
     const menu = element<HTMLDetailsElement>('reader-menu');
+    let pageLoadingTimer: ReturnType<typeof setTimeout> | undefined;
+    function pageLoading(message?: string) {
+        clearTimeout(pageLoadingTimer);
+        element('page-loading').hidden = true;
+        element('viewport').setAttribute('aria-busy', String(message !== undefined));
+        if (message !== undefined) {
+            element('page-loading-message').textContent = message;
+            pageLoadingTimer = setTimeout(() => {
+                element('page-loading').hidden = false;
+            }, 250);
+        }
+    }
     function loading(message?: string) {
         const active = message !== undefined;
         main.dataset.loading = String(active);
         element('reader-loading').hidden = !active;
         element('reader-loading').setAttribute('aria-busy', String(active));
         if (active) {
+            pageLoading();
             element('reader-loading-message').textContent = message;
             menu.open = false;
             for (const modal of document.querySelectorAll<HTMLDialogElement>('dialog[open]'))
@@ -88,6 +101,17 @@ export function createReaderUI(choose: (index: number) => void) {
     let lastHighlighted = -1;
     let view: 'welcome' | 'read' | 'ar' | 'camera-access' = 'welcome';
     let statusTimer: ReturnType<typeof setTimeout> | undefined;
+    let introductoryHint = false;
+    element('viewport').addEventListener(
+        'pointerdown',
+        () => {
+            if (view !== 'read' || !introductoryHint) return;
+            clearTimeout(statusTimer);
+            introductoryHint = false;
+            element('reading-status').hidden = true;
+        },
+        { capture: true },
+    );
     function updateContext() {
         element('reader-context').textContent =
             view === 'ar'
@@ -320,6 +344,7 @@ export function createReaderUI(choose: (index: number) => void) {
             }
         },
         loading,
+        pageLoading,
         empty() {
             loading();
             main.dataset.entry = 'empty';
@@ -470,7 +495,21 @@ export function createReaderUI(choose: (index: number) => void) {
             element('scan-help').hidden = view !== 'ar';
             updateContext();
         },
+        readingHint(hasModelControls: boolean) {
+            const touch = matchMedia('(pointer: coarse)').matches;
+            this.status(
+                hasModelControls
+                    ? touch
+                        ? 'Kéo joystick để di chuyển, chạm để tương tác.'
+                        : 'Dùng WASD hoặc phím mũi tên để di chuyển mô hình.'
+                    : touch
+                      ? 'Chạm để tương tác. Kéo để xoay, chụm để thu phóng.'
+                      : 'Nhấp để tương tác. Kéo để xoay, cuộn để thu phóng.',
+            );
+            introductoryHint = true;
+        },
         status(message: string, options?: { persistent?: boolean }) {
+            introductoryHint = false;
             clearTimeout(statusTimer);
             element('status').textContent = message;
             element('reading-status').hidden = !message;
@@ -483,6 +522,7 @@ export function createReaderUI(choose: (index: number) => void) {
             )
                 statusTimer = setTimeout(() => {
                     element('reading-status').hidden = true;
+                    introductoryHint = false;
                 }, 4000);
         },
         notice(message: string) {

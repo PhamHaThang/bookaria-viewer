@@ -39,6 +39,7 @@ export class PreviewRouteManager {
 
     private expire() {
         this.viewer.stop('Bản xem trước không còn khả dụng.');
+        this.viewer.clearSceneBytes();
         this.loadedToken = null;
         this.viewer.setPublicToken(null);
 
@@ -113,6 +114,7 @@ export class PreviewRouteManager {
             } catch (error) {
                 if (abort.signal.aborted || signal?.aborted) return false;
                 this.viewer.stop('Chưa tải được bản xem trước.');
+                this.viewer.clearSceneBytes();
                 this.loadedToken = null;
                 this.viewer.setPublicToken(null);
                 get('controls').hidden = true;

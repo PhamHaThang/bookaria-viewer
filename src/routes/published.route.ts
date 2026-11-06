@@ -48,6 +48,7 @@ export class PublishedRouteManager {
         this.readingEvents?.dispose();
         this.readingEvents = null;
         this.viewer.setReadingEvents(null);
+        this.viewer.clearSceneBytes();
 
         this.disposeReport?.();
         this.disposeReport = null;
@@ -130,7 +131,7 @@ export class PublishedRouteManager {
                 this.loadedSlug = slug;
                 this.versionId = info.version.id;
 
-                this.viewer.install(manifest, { isPreview: false });
+                this.viewer.install(manifest, { isPreview: false, slug });
                 this.readingEvents = startReadingEvents(info.version.id);
                 this.viewer.setReadingEvents(this.readingEvents);
                 this.disposeReport = installReportForm(slug, manifest.pages);

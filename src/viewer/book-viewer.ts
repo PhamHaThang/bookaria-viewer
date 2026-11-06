@@ -1,12 +1,18 @@
 import { CameraAccess, cameraError } from '../camera-access';
 import { createReaderUI, setMuteIcon } from '../reader-ui';
+import { AssetCache } from '../scene-core/asset-cache';
 import type { PageRuntime } from '../scene-core/buildScene';
 import type { Stage } from '../scene-core/Stage';
+import { askWorkflowQuestion } from '../scene-core/WorkflowPrompt';
+import { WorkflowState } from '../scene-core/WorkflowState';
 import { previewGroupUrl } from '../shared/api';
 import type { Manifest, ManifestPage } from '../shared/contracts/manifest.schema';
+import type { WorkflowNavigation } from '../shared/contracts/scene.schema';
 import type { startReadingEvents } from '../shared/reading-events';
+import { TrackingLoss } from '../tracker/tracking-loss';
 
-export type Book = Pick<Manifest, 'title' | 'pages' | 'assets' | 'targetGroups' | 'credits'>;
+export type Book = Pick<Manifest, 'title' | 'pages' | 'assets' | 'targetGroups' | 'credits'> &
+    Partial<Pick<Manifest, 'bookId' | 'version' | 'workflowVariables'>>;
 
 export interface BookViewerCallbacks {
     onPageChange?: (index: number) => void;
@@ -37,6 +43,11 @@ export class BookViewer {
     private mode: '3d' | 'ar' = '3d';
     private stage: Stage | null = null;
     private runtime: PageRuntime | null = null;
+
+    private progress = new WorkflowState();
+    private automaticHops = 0;
+    private trackingLoss = new TrackingLoss();
+    private sceneBytes = new AssetCache();
 
     private loading: AbortController | null = null;
     private cameraAbort: AbortController | null = null;
@@ -71,6 +82,7 @@ export class BookViewer {
         this.select = get<HTMLSelectElement>('pages');
 
         this.ui = createReaderUI((next) => {
+            this.automaticHops = 0;
             if (!this.book?.pages[next]) return;
             if (this.mode === 'ar') {
                 const page = this.book.pages[next];
@@ -171,6 +183,7 @@ export class BookViewer {
     }
 
     clearCamera(keepPrepared = false) {
+        this.trackingLoss.cancel();
         if (!keepPrepared) this.cameraAccess.clear();
         if (this.lossTimer) clearTimeout(this.lossTimer);
         this.lossTimer = null;
@@ -185,6 +198,10 @@ export class BookViewer {
         this.cameraRecognized = false;
         if (this.scanTimer) clearTimeout(this.scanTimer);
         this.scanTimer = null;
+    }
+
+    clearSceneBytes() {
+        this.sceneBytes.clear();
     }
 
     stop(message = 'Đã dừng xem. Bấm Bắt đầu để xem lại.') {
@@ -204,13 +221,22 @@ export class BookViewer {
         get('external-link').hidden = true;
         this.controls();
         this.ui.loading();
+        this.ui.pageLoading();
         this.ui.view('welcome');
         if (message) this.status(message);
         this.reply('stopped');
     }
 
-    install(value: Book, options?: { isPreview?: boolean; scanEntry?: boolean }) {
+    install(value: Book, options?: { isPreview?: boolean; scanEntry?: boolean; slug?: string }) {
+        this.sceneBytes.clear();
         this.book = value;
+        this.progress = new WorkflowState(
+            options?.slug && value.bookId
+                ? `bookaria:progress:v1:${value.bookId}:${value.version || 1}`
+                : undefined,
+            value.workflowVariables || [],
+        );
+        this.automaticHops = 0;
         this.index = 0;
         this.ui.ready(value, options);
         get('title').textContent = value.title;
@@ -283,6 +309,7 @@ export class BookViewer {
     }
 
     showTracked(world: number[], dimensions: [number, number], page: ManifestPage) {
+        this.trackingLoss.cancel();
         if (!this.runtime || !this.targetToPageMatrix) return;
         this.stage?.track(this.targetToPageMatrix(world, ...dimensions, page));
         if (!this.tracked) {
@@ -293,26 +320,38 @@ export class BookViewer {
             if (this.runtimeStarted) this.runtime.resume();
             else {
                 this.runtimeStarted = true;
+                this.stage?.revealAR();
                 this.runtime.start();
             }
+            this.runtime.markerFound();
             this.ui.scan(true);
             this.controls();
             this.status(`Đã nhận diện trang ${this.index + 1}. Chạm để khám phá.`);
         }
     }
 
-    lostTarget() {
+    lostTarget(immediate = false) {
         if (!this.tracked) return;
-        this.tracked = false;
-        this.stage?.track(null);
-        this.ui.scan(false);
-        this.controls();
-        this.status('Đưa camera trở lại trang sách.');
-        if (this.lossTimer) clearTimeout(this.lossTimer);
-        const previous = this.runtime;
-        this.lossTimer = setTimeout(() => {
-            if (!this.tracked && previous === this.runtime) this.runtime?.suspend();
-        }, 600);
+        const confirm = () => {
+            if (!this.tracked) return;
+            this.tracked = false;
+            this.runtime?.markerLost();
+            this.stage?.track(null);
+            this.ui.scan(false);
+            this.controls();
+            this.status('Đưa camera trở lại trang sách.');
+            if (this.lossTimer) clearTimeout(this.lossTimer);
+            const previous = this.runtime;
+            this.lossTimer = setTimeout(() => {
+                if (!this.tracked && previous === this.runtime) this.runtime?.suspend();
+            }, 600);
+        };
+        if (immediate) {
+            this.trackingLoss.cancel();
+            confirm();
+        } else {
+            this.trackingLoss.defer(confirm);
+        }
     }
 
     async ensureCamera(page: ManifestPage) {
@@ -366,7 +405,7 @@ export class BookViewer {
                     },
                     searching: () => {
                         if (abort.signal.aborted) return;
-                        this.lostTarget();
+                        this.lostTarget(true);
                         this.matrices.clear();
                         this.cameraGroup = null;
                         if (!this.runtimeStarted) this.status('Đang tìm trang trong sách…');
@@ -397,15 +436,67 @@ export class BookViewer {
         }
     }
 
+    workflowNavigate(navigation: WorkflowNavigation) {
+        if (!this.book) return;
+        if (++this.automaticHops > 8) {
+            this.notice('Luồng đang chuyển trang liên tục. Chọn trang để tiếp tục.');
+            return;
+        }
+        if (navigation.target === 'end') {
+            this.stop('');
+            this.notice(navigation.message || 'Bạn đã hoàn thành chuyến khám phá!');
+            this.callbacks.onNavigateHome?.();
+            return;
+        }
+        const next =
+            navigation.target === 'next'
+                ? this.index + 1
+                : navigation.target === 'previous'
+                  ? this.index - 1
+                  : this.book.pages.findIndex((page) => page.pageId === navigation.pageId);
+        if (next === this.index) {
+            this.notice('Bạn đang ở trang được chọn.');
+            return;
+        }
+        if (!this.book.pages[next]) {
+            this.notice('Không có trang tiếp theo ở hướng này.');
+            return;
+        }
+        if (this.mode === 'ar') {
+            const page = this.book.pages[next];
+            if (page.marker.mode !== 'NONE') {
+                if (page.group !== undefined) this.tracker?.prefer(page.group);
+                this.status(
+                    `Hướng camera vào trang ${next + 1}${page.title ? `: ${page.title}` : ''}.`,
+                );
+                this.notice(`Tiếp tục bằng cách quét trang ${next + 1}.`);
+                return;
+            }
+        }
+        if (this.callbacks.onPageChange) {
+            this.callbacks.onPageChange(next);
+        } else {
+            void this.activate(next);
+        }
+    }
+
     async activate(next: number) {
         if (!this.book?.pages[next]) return;
+        this.trackingLoss.cancel();
         const sequence = ++this.generation;
         this.loading?.abort();
         const abort = new AbortController();
         this.loading = abort;
-        this.ui.loading('Đang tải nội dung trang…');
+        if (this.mode === 'ar' && this.tracker) {
+            this.ui.loading();
+            this.ui.pageLoading(`Đang tải nội dung trang ${next + 1}…`);
+            this.status('');
+        } else {
+            this.ui.loading('Đang tải nội dung trang…');
+        }
         this.notice('');
         const old = this.runtime;
+        let prepared: PageRuntime | null = null;
         if (this.lossTimer) clearTimeout(this.lossTimer);
         this.lossTimer = null;
         this.runtimeStarted = false;
@@ -418,8 +509,9 @@ export class BookViewer {
         if (
             this.mode === 'ar' &&
             this.matrices.has(`${this.book.pages[next].group}:${this.book.pages[next].targetIndex}`)
-        )
+        ) {
             this.ui.scan(true);
+        }
         get('tap-section').hidden = true;
         get('rule-section').hidden = true;
         get('external-link').hidden = true;
@@ -446,31 +538,57 @@ export class BookViewer {
             if (this.mode === 'ar') {
                 await this.ensureCamera(page);
                 abort.signal.throwIfAborted();
-                this.ui.loading('Đang tải nội dung trang…');
+                this.ui.loading();
+                this.ui.pageLoading(`Đang tải nội dung trang ${next + 1}…`);
             }
             if (this.mode === 'ar' && page.marker.mode === 'NONE') {
                 this.clearCamera();
                 this.mode = '3d';
                 this.stage.setAR(null);
+                this.ui.loading('Đang tải nội dung trang…');
                 this.notice('Trang này không có marker; đang xem 3D.');
             }
-            const created = await buildScene(page, this.book.assets, abort.signal, {
-                notice: (msg) => this.notice(msg),
-                log: (msg) => this.log(msg),
-                tap: (objectId) =>
-                    this.readingEvents?.record({ type: 'TAP', pageId: page.pageId, objectId }),
-                link: (url) => {
-                    get<HTMLAnchorElement>('link').href = url;
-                    get<HTMLAnchorElement>('link').textContent =
-                        `Mở liên kết: ${new URL(url).hostname}`;
-                    get('external-link').hidden = false;
+            const created = await buildScene(
+                page,
+                this.book.assets,
+                abort.signal,
+                {
+                    notice: (msg) => this.notice(msg),
+                    log: (msg) => this.log(msg),
+                    state: this.progress,
+                    question: async (question, signal) => {
+                        const answer = await askWorkflowQuestion(question, signal);
+                        if (answer !== null) this.automaticHops = 0;
+                        return answer;
+                    },
+                    navigate: (navigation) =>
+                        queueMicrotask(() => {
+                            if (!abort.signal.aborted && sequence === this.generation)
+                                this.workflowNavigate(navigation);
+                        }),
+                    tap: (objectId) => {
+                        this.automaticHops = 0;
+                        this.readingEvents?.record({ type: 'TAP', pageId: page.pageId, objectId });
+                    },
+                    link: (url) => {
+                        get<HTMLAnchorElement>('link').href = url;
+                        get<HTMLAnchorElement>('link').textContent =
+                            `Mở liên kết: ${new URL(url).hostname}`;
+                        get('external-link').hidden = false;
+                    },
                 },
-            });
+                { background: this.mode !== 'ar', bytes: this.sceneBytes },
+            );
+            prepared = created;
+            abort.signal.throwIfAborted();
+            if (this.mode === 'ar') await this.stage.prepare(created, page, abort.signal);
             if (sequence !== this.generation || abort.signal.aborted) {
                 created.dispose();
+                prepared = null;
                 return;
             }
             this.runtime = created;
+            prepared = null;
             this.stage.setRuntime(created, page);
             this.runtime.mute(this.muted);
             this.buttons(page);
@@ -488,16 +606,22 @@ export class BookViewer {
                 this.stage.setAR(null);
                 this.runtimeStarted = true;
                 this.runtime.start();
-                this.status('Chạm để khám phá. Kéo để xoay, chụm hai ngón để thu phóng.');
+                this.ui.readingHint(
+                    [...(this.runtime.modelControls?.entries.values() || [])].some(
+                        (entry) => entry.enabled,
+                    ),
+                );
             }
             await new Promise<void>((resolve) =>
                 requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
             );
             if (sequence !== this.generation || abort.signal.aborted) return;
             this.ui.loading();
+            this.ui.pageLoading();
             this.controls();
             this.reply('started');
         } catch (error) {
+            prepared?.dispose();
             if (sequence !== this.generation || abort.signal.aborted) return;
             this.stop('Chưa mở được nội dung. Bạn có thể thử lại hoặc chọn xem 3D.');
             this.notice(
@@ -517,6 +641,7 @@ export class BookViewer {
     }
 
     async showPage(pageIndex: number): Promise<void> {
+        this.automaticHops = 0;
         if (!this.book) return;
         this.clearCamera();
         this.mode = '3d';
@@ -574,6 +699,7 @@ export class BookViewer {
     }
 
     async showAr(preferredIndex?: number): Promise<void> {
+        this.automaticHops = 0;
         if (this.embedded || !this.book) return;
         this.clearCamera(true);
         this.mode = 'ar';
@@ -645,6 +771,7 @@ export class BookViewer {
         });
 
         on(get('start'), 'click', () => {
+            this.automaticHops = 0;
             if (this.ui.scanEntry && this.book?.pages.some((page) => page.marker.mode !== 'NONE')) {
                 this.callbacks.onStartCamera?.();
             } else {
@@ -653,6 +780,7 @@ export class BookViewer {
         });
 
         on(get('welcome-camera'), 'click', () => {
+            this.automaticHops = 0;
             if (this.ui.scanEntry) {
                 this.callbacks.onStartReading?.();
             } else {
@@ -697,16 +825,19 @@ export class BookViewer {
         on(get('mute'), 'click', () => this.setMuted(!this.muted));
 
         on(this.select, 'change', () => {
+            this.automaticHops = 0;
             const next = Number(this.select.value);
             this.callbacks.onPageChange?.(next);
         });
 
         on(get('previous'), 'click', () => {
+            this.automaticHops = 0;
             const next = Math.max(0, this.index - 1);
             this.callbacks.onPageChange?.(next);
         });
 
         on(get('next'), 'click', () => {
+            this.automaticHops = 0;
             const next = Math.min((this.book?.pages.length || 1) - 1, this.index + 1);
             this.callbacks.onPageChange?.(next);
         });
@@ -735,7 +866,10 @@ export class BookViewer {
             this.notice(event.detail);
         }) as EventListener);
 
-        const onPageHide = () => this.stop();
+        const onPageHide = () => {
+            this.sceneBytes.clear();
+            this.stop();
+        };
         window.addEventListener('pagehide', onPageHide);
         this.listeners.push(() => window.removeEventListener('pagehide', onPageHide));
 

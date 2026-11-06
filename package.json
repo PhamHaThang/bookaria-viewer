@@ -15,7 +15,8 @@
         "contract:sync": "node scripts/sync-contract.mjs",
         "contract:check": "node scripts/sync-contract.mjs --check",
         "contract:verify": "node scripts/sync-contract.mjs --verify",
-        "vendor:verify": "node scripts/verify-vendor.mjs"
+        "vendor:verify": "node scripts/verify-vendor.mjs",
+        "test:ar": "playwright test --config=playwright.ar.config.mjs"
     },
     "dependencies": {
         "@fontsource/be-vietnam-pro": "5.3.0",
@@ -28,6 +29,8 @@
     },
     "devDependencies": {
         "@biomejs/biome": "2.5.15",
+        "@msgpack/msgpack": "2.8.0",
+        "@playwright/test": "1.64.1",
         "@tailwindcss/vite": "4.3.3",
         "@types/node": "24.19.2",
         "@types/three": "0.161.2",

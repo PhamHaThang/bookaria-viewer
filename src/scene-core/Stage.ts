@@ -9,6 +9,7 @@ import {
 } from './ar-visibility';
 import type { PageRuntime } from './buildScene';
 import { stopSceneOrbit } from './camera-navigation';
+import { prepareScene } from './prepare-scene';
 import { ReadingNavigation } from './ReadingNavigation';
 import {
     fitReadingCamera,
@@ -34,6 +35,7 @@ export class Stage {
     private navigated = false;
     private nextVisibilityCheck = 0;
     private contentVisibility: ARContentVisibility | null = null;
+    private reveal: Animation | undefined;
     constructor(private container: HTMLElement) {
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -122,6 +124,10 @@ export class Stage {
         this.nextVisibilityCheck = 0;
         if (runtime) {
             this.anchor.add(runtime.group);
+            runtime.attachControls(
+                this.renderer.domElement.parentElement || document.body,
+                this.renderer.domElement,
+            );
             setPageBackgroundVisibility(runtime.group, !this.arProjection);
         }
         if (page) {
@@ -129,6 +135,18 @@ export class Stage {
             this.lighting.setPreset(page.settings.lighting);
         }
         if (!this.arProjection) this.resetView();
+    }
+    async prepare(runtime: PageRuntime, page: ManifestPage, signal: AbortSignal) {
+        this.lighting.setPreset(page.settings.lighting);
+        await prepareScene(this.renderer, runtime.group, this.camera, this.scene, signal);
+    }
+    revealAR() {
+        this.reveal?.cancel();
+        if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        this.reveal = this.renderer.domElement.animate([{ opacity: 0 }, { opacity: 1 }], {
+            duration: 160,
+            easing: 'ease-out',
+        });
     }
     private readingFrame(): ReadingFrame {
         const width = Math.max(1, this.container.clientWidth),
@@ -210,6 +228,7 @@ export class Stage {
         else this.resetView();
     }
     dispose() {
+        this.reveal?.cancel();
         this.renderer.setAnimationLoop(null);
         this.resizeObserver.disconnect();
         this.navigation.dispose();

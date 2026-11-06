@@ -1,4 +1,10 @@
-import type { NavigateOptions, RouteDefinition, RouteMatch } from './types';
+import type {
+    AfterNavigationHook,
+    NavigateOptions,
+    NavigationGuard,
+    RouteDefinition,
+    RouteMatch,
+} from './types';
 
 interface CompiledRoute {
     definition: RouteDefinition;
@@ -29,6 +35,8 @@ export class Router {
     private notFoundHandler:
         | ((match: RouteMatch, signal: AbortSignal) => Promise<void> | void)
         | null = null;
+    private beforeGuards: NavigationGuard[] = [];
+    private afterHooks: AfterNavigationHook[] = [];
     private popstateListener: (() => void) | null = null;
     private clickListener: ((event: MouseEvent) => void) | null = null;
 
@@ -39,6 +47,16 @@ export class Router {
             regex,
             paramNames,
         });
+        return this;
+    }
+
+    beforeEach(guard: NavigationGuard): this {
+        this.beforeGuards.push(guard);
+        return this;
+    }
+
+    afterEach(hook: AfterNavigationHook): this {
+        this.afterHooks.push(hook);
         return this;
     }
 
@@ -195,6 +213,7 @@ export class Router {
         const abort = new AbortController();
         this.activeAbort = abort;
 
+        const from = this.currentMatch;
         const found = this.match(parsed.pathname);
         if (found) {
             const match: RouteMatch = {
@@ -204,11 +223,30 @@ export class Router {
                 query: parsed.query,
                 hash: parsed.hash,
             };
+
+            for (const guard of this.beforeGuards) {
+                const redirectOrAllow = await guard(match, from);
+                if (redirectOrAllow === false || abort.signal.aborted) return;
+                if (typeof redirectOrAllow === 'string') {
+                    void this.navigate(redirectOrAllow, { replace: true });
+                    return;
+                }
+            }
+
             this.currentMatch = match;
             this.currentRouteId = found.route.id;
 
             try {
                 await found.route.handler(match, abort.signal);
+                if (!abort.signal.aborted) {
+                    for (const hook of this.afterHooks) {
+                        try {
+                            hook(match, from);
+                        } catch (hookError) {
+                            console.error('afterEach hook error:', hookError);
+                        }
+                    }
+                }
             } catch (error) {
                 if (!abort.signal.aborted) {
                     console.error(`Route handler failed for ${found.route.id}:`, error);
