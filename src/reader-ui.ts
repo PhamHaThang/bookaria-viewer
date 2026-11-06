@@ -59,6 +59,11 @@ export function setMuteIcon(muted: boolean) {
     button.title = label;
     button.replaceChildren(createElement(muted ? VolumeX : Volume2, { 'aria-hidden': 'true' }));
 }
+function setButtonIcon(buttonId: string, icon: typeof BookOpen) {
+    element<HTMLButtonElement>(buttonId)
+        .querySelector('svg')
+        ?.replaceWith(createElement(icon, { 'aria-hidden': 'true' }));
+}
 export function createReaderUI(choose: (index: number) => void) {
     paintIcons();
     const scanner = createElement(ScanLine, {
@@ -357,9 +362,11 @@ export function createReaderUI(choose: (index: number) => void) {
             element('welcome-camera').hidden = !ar;
             element('camera').hidden = !ar;
             const scanFirst = scanEntry && ar;
+            setButtonIcon('start', scanFirst ? ScanLine : BookOpen);
             (element('start').querySelector('span') as HTMLSpanElement).textContent = scanFirst
                 ? 'Quét sách'
                 : 'Bắt đầu đọc';
+            setButtonIcon('welcome-camera', scanFirst ? BookOpen : ScanLine);
             (element('welcome-camera').querySelector('span') as HTMLSpanElement).textContent =
                 scanFirst ? 'Đọc trên màn hình' : 'Quét sách';
             element('welcome-hint').hidden = !scanFirst;
