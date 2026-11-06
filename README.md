@@ -14,12 +14,18 @@ pnpm dev
 
 Chỉ sao chép `.env.example` khi chưa có `.env`, để giữ cấu hình local hiện tại. Mở [Viewer local](https://viewer.localhost:5174). Vite dùng HTTPS mặc định, lắng nghe trên mạng LAN và giữ cố định cổng `5174`.
 
-| Đường dẫn         | Mục đích                                                                            |
-| ----------------- | ----------------------------------------------------------------------------------- |
-| `/`               | Trang tối giản với logo và hướng dẫn mở liên kết sách hoặc quét QR trên bìa.        |
-| `/b/:slug`        | Đọc phiên bản sách đã xuất bản, xem thông tin sách và báo cáo nội dung.             |
-| `/preview/:token` | Xem trước bằng liên kết tạm do Studio tạo; liên kết có thể hết hạn hoặc bị thu hồi. |
-| `/embed`          | Bản xem nhúng do Studio điều khiển; mở từ Studio, không mở trực tiếp.               |
+| Đường dẫn                    | Mục đích                                                                            |
+| ---------------------------- | ----------------------------------------------------------------------------------- |
+| `/`                          | Trang tối giản với logo và hướng dẫn mở liên kết sách hoặc quét QR trên bìa.        |
+| `/b/:slug`                   | Màn hình giới thiệu, thông tin sách đã xuất bản.                                    |
+| `/b/:slug/p/:page`           | Đọc sách 3D tại trang cụ thể (trang 1-based, ví dụ: `/b/mat-biec/p/2`).             |
+| `/b/:slug/camera`            | Màn hình yêu cầu quyền camera trước khi quét AR.                                    |
+| `/b/:slug/ar`                | Chế độ quét AR qua camera (tùy chọn trang ưu tiên: `/b/:slug/ar/p/:page`).          |
+| `/preview/:token`            | Màn hình giới thiệu bản xem trước bằng liên kết tạm từ Studio.                      |
+| `/preview/:token/p/:page`    | Đọc bản xem trước 3D tại trang cụ thể.                                              |
+| `/preview/:token/camera`     | Màn hình cấp quyền camera cho bản xem trước.                                        |
+| `/preview/:token/ar`         | Chế độ quét AR cho bản xem trước.                                                   |
+| `/embed`                     | Bản xem nhúng do Studio điều khiển; mở từ Studio qua iframe postMessage.           |
 
 ## Cấu hình
 
@@ -73,7 +79,10 @@ Thử thủ công trên máy tính và điện thoại: mở sách, chuyển tra
 
 | Thư mục/file                                      | Vai trò                                                  |
 | ------------------------------------------------- | -------------------------------------------------------- |
-| `src/main.ts`                                     | Điều phối tải sách, đọc, preview và camera.              |
+| `src/main.ts`                                     | Khởi tạo router, đăng ký các route và kết nối sự kiện.   |
+| `src/router/`                                     | Hệ thống client-side routing, pattern matcher và paths.  |
+| `src/routes/`                                     | Các route controller: home, embed, published, preview.   |
+| `src/viewer/`                                     | Điều phối hiển thị sách, Three.js, MindAR và tương tác.  |
 | `src/reader-ui.ts`, `src/style.css`, `index.html` | Giao diện, theme và các trạng thái hiển thị.             |
 | `src/scene-core/`                                 | Dựng scene, điều khiển góc nhìn và chạy tương tác.       |
 | `src/tracker/`                                    | Nhận diện ảnh và tìm trang giữa các nhóm marker.         |

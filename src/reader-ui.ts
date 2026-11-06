@@ -101,10 +101,11 @@ export function createReaderUI(choose: (index: number) => void) {
                     : 'Sách tương tác';
     }
 
-    const scanEntry =
+    let currentScanEntry =
         location.pathname !== '/embed' && new URLSearchParams(location.search).get('mode') === 'ar';
-    const isPreview = location.pathname.startsWith('/preview/') || location.pathname === '/embed';
-    element('preview-badge').hidden = !isPreview;
+    let currentIsPreview =
+        location.pathname.startsWith('/preview/') || location.pathname === '/embed';
+    element('preview-badge').hidden = !currentIsPreview;
     let helpReturnFocus: HTMLElement | null = null;
     function dialog(id: string) {
         if (id === 'help-dialog') {
@@ -302,7 +303,22 @@ export function createReaderUI(choose: (index: number) => void) {
         return button;
     }
     return {
-        scanEntry,
+        get scanEntry() {
+            return currentScanEntry;
+        },
+        setContext(ctx: { isPreview?: boolean; scanEntry?: boolean }) {
+            if (ctx.isPreview !== undefined) {
+                currentIsPreview = ctx.isPreview;
+                element('preview-badge').hidden = !currentIsPreview;
+                element('welcome-kind').textContent = currentIsPreview
+                    ? 'Bản xem trước'
+                    : 'Sách tương tác Bookaria';
+                element('welcome-kind').hidden = !currentIsPreview;
+            }
+            if (ctx.scanEntry !== undefined) {
+                currentScanEntry = ctx.scanEntry;
+            }
+        },
         loading,
         empty() {
             loading();
@@ -311,7 +327,14 @@ export function createReaderUI(choose: (index: number) => void) {
             element('welcome').hidden = true;
             menu.open = false;
         },
-        ready(book: { title: string; pages: ManifestPage[] }) {
+        ready(
+            book: { title: string; pages: ManifestPage[] },
+            options?: { isPreview?: boolean; scanEntry?: boolean },
+        ) {
+            if (options) {
+                if (options.isPreview !== undefined) currentIsPreview = options.isPreview;
+                if (options.scanEntry !== undefined) currentScanEntry = options.scanEntry;
+            }
             loading();
             delete main.dataset.entry;
             element('empty-entry').hidden = true;
@@ -331,7 +354,7 @@ export function createReaderUI(choose: (index: number) => void) {
                 book.pages.some((page) => page.marker.mode !== 'NONE');
             element('welcome-camera').hidden = !ar;
             element('camera').hidden = !ar;
-            const scanFirst = scanEntry && ar;
+            const scanFirst = currentScanEntry && ar;
             (element('start').querySelector('span') as HTMLSpanElement).textContent = scanFirst
                 ? 'Quét sách'
                 : 'Bắt đầu đọc';
@@ -341,10 +364,10 @@ export function createReaderUI(choose: (index: number) => void) {
             element('welcome-hint').textContent = scanFirst
                 ? 'Cho phép camera khi bạn chọn quét trang sách hoặc marker đã in.'
                 : '';
-            element('welcome-kind').textContent = isPreview
+            element('welcome-kind').textContent = currentIsPreview
                 ? 'Bản xem trước'
                 : 'Sách tương tác Bookaria';
-            element('welcome-kind').hidden = !isPreview;
+            element('welcome-kind').hidden = !currentIsPreview;
             element('page-strip').replaceChildren(
                 ...book.pages.map((page, index) => thumbnail(page, index, false)),
             );
