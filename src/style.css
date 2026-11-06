@@ -21,6 +21,7 @@
     --color-reader-ink: var(--reader-ink);
     --color-reader-muted: var(--reader-muted);
     --color-reader-line: var(--reader-line);
+    --color-reader-control-line: var(--reader-control-line);
     --color-reader-hover: var(--reader-hover);
     --color-reader-primary: var(--reader-primary);
     --color-reader-on-primary: var(--reader-on-primary);
@@ -52,6 +53,7 @@
         --reader-ink: #1c2024;
         --reader-muted: #60646c;
         --reader-line: #e0e1e6;
+        --reader-control-line: #858993;
         --reader-hover: #f0f0f3;
         --reader-primary: #000;
         --reader-on-primary: #fff;
@@ -71,6 +73,7 @@
         --reader-ink: #edeef0;
         --reader-muted: #b0b4ba;
         --reader-line: #383a40;
+        --reader-control-line: #858585;
         --reader-hover: #292a2e;
         --reader-primary: #fff;
         --reader-on-primary: #111113;
@@ -103,7 +106,7 @@
     }
     select,
     textarea {
-        @apply min-h-11 w-full rounded-lg border border-reader-line bg-reader-surface px-3 py-2.5 text-sm text-reader-ink;
+        @apply min-h-11 w-full rounded-lg border border-reader-control-line bg-reader-surface px-3 py-2.5 text-sm text-reader-ink;
     }
     select option {
         @apply bg-reader-surface text-reader-ink;
