@@ -1,8 +1,10 @@
 import { CameraAccess, cameraError } from './camera-access';
+import type { ReaderNoticeOptions } from './reader-feedback';
 import { createReaderUI, setMuteIcon } from './reader-ui';
 import { installReportForm } from './report-form';
 import { AssetCache } from './scene-core/asset-cache';
 import type { PageRuntime } from './scene-core/buildScene';
+import { MediaElementPool } from './scene-core/MediaElementPool';
 import type { Stage } from './scene-core/Stage';
 import { askWorkflowQuestion } from './scene-core/WorkflowPrompt';
 import { WorkflowState } from './scene-core/WorkflowState';
@@ -43,7 +45,7 @@ const ui = createReaderUI((next) => {
     }
 });
 const status = (message: string) => ui.status(message);
-const notice = (message: string) => ui.notice(message);
+const notice = (message: string, options?: ReaderNoticeOptions) => ui.notice(message, options);
 const embedded = location.pathname === '/embed';
 document.documentElement.classList.toggle('viewer-embedded', embedded);
 const publicToken = location.pathname.match(/^\/preview\/([A-Za-z0-9_-]{32})\/?$/)?.[1];
@@ -82,6 +84,7 @@ let tracker: Awaited<ReturnType<typeof import('./tracker/mindar').startTracking>
 const cameraAccess = new CameraAccess();
 const trackingLoss = new TrackingLoss();
 const sceneBytes = new AssetCache();
+const mediaPool = new MediaElementPool();
 const retiring = new Set<PageRuntime>();
 const matrices = new Map<string, { world: number[]; dimensions: [number, number] }>();
 let cameraTask: Promise<void> | null = null,
@@ -102,12 +105,17 @@ const log = (message: string) => {
 };
 function controls() {
     get<HTMLButtonElement>('reset').disabled = !stage || mode === 'ar';
+    get('reset').hidden = !stage || mode === 'ar';
     get<HTMLButtonElement>('retry-media').disabled = !runtime;
     get<HTMLButtonElement>('previous').disabled = !book || index === 0;
     get<HTMLButtonElement>('next').disabled = !book || index === book.pages.length - 1;
     get<HTMLButtonElement>('camera').disabled =
         embedded || !book?.pages.some((page) => page.marker.mode !== 'NONE');
     get<HTMLButtonElement>('restart').disabled = !runtime || (mode === 'ar' && !tracked);
+    get('restart').hidden = !runtime || (mode === 'ar' && !tracked);
+    get('mute').hidden = !Object.values(book?.assets || {}).some(
+        (asset) => asset.type === 'AUDIO' || asset.type === 'VIDEO',
+    );
     select.value = String(index);
     ui.navigation(index, mode === 'ar', tracked);
 }
@@ -151,6 +159,7 @@ function stop(message = 'Đã dừng xem. Bấm Bắt đầu để xem lại.') 
     reply('stopped');
 }
 function install(value: Book) {
+    mediaPool.dispose();
     sceneBytes.clear();
     book = value;
     progress = new WorkflowState(
@@ -326,7 +335,7 @@ async function ensureCamera(page: ManifestPage) {
                     if (!runtimeStarted) status('Đang tìm trang trong sách…');
                 },
                 issue: (message) => {
-                    if (!abort.signal.aborted) notice(message);
+                    if (!abort.signal.aborted) notice(message, { kind: 'error', action: 'retry' });
                 },
             },
             (signal) => cameraAccess.acquire(signal),
@@ -417,7 +426,9 @@ async function activate(next: number) {
             book.assets,
             abort.signal,
             {
-                notice,
+                notice: (message, options) => {
+                    if (!abort.signal.aborted && sequence === generation) notice(message, options);
+                },
                 log,
                 state: progress,
                 question: async (question, signal) => {
@@ -441,7 +452,7 @@ async function activate(next: number) {
                     get('external-link').hidden = false;
                 },
             },
-            { background: mode !== 'ar', bytes: sceneBytes },
+            { background: mode !== 'ar', bytes: sceneBytes, mediaPool },
         );
         prepared = created;
         abort.signal.throwIfAborted();
@@ -493,6 +504,7 @@ async function activate(next: number) {
                 : error instanceof Error
                   ? error.message
                   : 'Không mở được trang.',
+            { kind: 'error', action: 'retry' },
         );
         reply('error');
     }
@@ -526,8 +538,10 @@ function workflowNavigate(navigation: WorkflowNavigation) {
         const page = book.pages[next];
         if (page.marker.mode !== 'NONE') {
             if (page.group !== undefined) tracker?.prefer(page.group);
-            status(`Hướng camera vào trang ${next + 1}${page.title ? `: ${page.title}` : ''}.`);
-            notice(`Tiếp tục bằng cách quét trang ${next + 1}.`);
+            notice('');
+            ui.status(`Hướng camera vào trang ${next + 1}${page.title ? `: ${page.title}` : ''}.`, {
+                persistent: true,
+            });
             return;
         }
     }
@@ -649,7 +663,8 @@ get('home-link').addEventListener('click', () => {
 get('reset').addEventListener('click', () => stage?.resetView());
 get('retry-media').addEventListener('click', () => {
     if (mode === 'ar' && !tracked) {
-        notice('Hướng camera vào trang trước khi phát media.');
+        notice('');
+        ui.status('Hướng camera vào trang trước khi phát âm thanh/video.', { persistent: true });
         return;
     }
     runtime?.retryMedia();
@@ -694,11 +709,12 @@ viewport.addEventListener('ar-content-visibility', (event) => {
 });
 viewport.addEventListener('stage-error', (event) => {
     stop('Đã dừng xem.');
-    notice((event as CustomEvent<string>).detail);
+    notice((event as CustomEvent<string>).detail, { kind: 'error', action: 'retry' });
 });
 window.addEventListener('pagehide', () => {
     sceneBytes.clear();
     stop();
+    mediaPool.dispose();
 });
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
@@ -795,7 +811,9 @@ if (embedded) {
                         ? 'Sách không còn khả dụng.'
                         : 'Chưa kiểm tra được trạng thái sách. Bấm Thử tải lại để kết nối lại.',
                 );
-                notice(error instanceof Error ? error.message : 'Không tải được sách.');
+                notice(error instanceof Error ? error.message : 'Không tải được sách.', {
+                    kind: 'error',
+                });
             }
         } finally {
             clearTimeout(deadline);
@@ -836,7 +854,9 @@ if (embedded) {
         } catch (error) {
             if (abort.signal.aborted) return;
             clearPublication('Chưa mở được sách đã xuất bản.');
-            notice(error instanceof Error ? error.message : 'Không tải được sách.');
+            notice(error instanceof Error ? error.message : 'Không tải được sách.', {
+                kind: 'error',
+            });
         }
     }
     get('retry').addEventListener('click', () => {
@@ -865,7 +885,9 @@ if (embedded) {
         get('main').dataset.ready = 'false';
         get<HTMLButtonElement>('start').disabled = true;
         get('controls').hidden = true;
-        notice('Liên kết đã hết hạn hoặc không còn khả dụng. Hãy tạo liên kết mới từ Studio.');
+        notice('Liên kết đã hết hạn hoặc không còn khả dụng. Hãy tạo liên kết mới từ Studio.', {
+            kind: 'error',
+        });
         if (expiryTimer) clearTimeout(expiryTimer);
         if (availabilityTimer) clearInterval(availabilityTimer);
     }
@@ -914,7 +936,9 @@ if (embedded) {
             sceneBytes.clear();
             book = null;
             get('controls').hidden = true;
-            notice(error instanceof Error ? error.message : 'Lỗi tải bản xem trước.');
+            notice(error instanceof Error ? error.message : 'Lỗi tải bản xem trước.', {
+                kind: 'error',
+            });
             get('retry').hidden = false;
         }
     }

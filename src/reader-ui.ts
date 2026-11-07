@@ -21,6 +21,7 @@ import {
     VolumeX,
     X,
 } from 'lucide';
+import { type ReaderNoticeOptions, readerFeedback } from './reader-feedback';
 import type { PublicBook } from './shared/contracts/dto.schema';
 import type { ManifestPage } from './shared/contracts/manifest.schema';
 
@@ -509,11 +510,14 @@ export function createReaderUI(choose: (index: number) => void) {
                     introductoryHint = false;
                 }, 4000);
         },
-        notice(message: string) {
+        notice(message: string, options?: ReaderNoticeOptions) {
+            const feedback = readerFeedback(message, options);
             element('error').textContent = message;
-            element('feedback').hidden = !message;
-            element('retry-media').hidden = !/âm thanh|media|video/i.test(message);
-            element('feedback-retry').hidden = !message || /âm thanh|media|video/i.test(message);
+            element('error').setAttribute('role', feedback.role);
+            element('feedback').hidden = !feedback.visible;
+            element('retry-media').hidden = !feedback.media;
+            element('retry-media').textContent = feedback.mediaLabel;
+            element('feedback-retry').hidden = !feedback.retry;
             element('feedback-retry').textContent =
                 main.dataset.ready === 'false' ? 'Thử tải lại' : 'Thử lại';
         },

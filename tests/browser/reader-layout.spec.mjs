@@ -145,6 +145,7 @@ for (const setup of [
             await page.locator('#start').click();
             await expect(page.locator('#main')).toHaveAttribute('data-view', 'read');
             await expect(page.locator('#reader-loading')).toBeHidden();
+            await expect(page.locator('#mute')).toBeHidden();
             const pad = page.getByRole('group', { name: 'Joystick di chuyển mô hình' });
             if (setup.touch) {
                 await expect(page.locator('#page-strip')).toBeHidden();
@@ -187,6 +188,60 @@ for (const setup of [
                         document.documentElement.scrollHeight <= innerHeight,
                 ),
             ).toBe(true);
+        });
+    });
+}
+
+for (const width of [390, 1366]) {
+    test.describe(`feedback actions at ${width}px`, () => {
+        test.use({ viewport: { width, height: 844 } });
+        test('guidance has no recovery button and actual errors keep their own action', async ({
+            page,
+        }, info) => {
+            await page.goto('/');
+            await page.evaluate(async () => {
+                const { createReaderUI } = await import('/src/reader-ui.ts');
+                window.feedbackUI = createReaderUI(() => {});
+                window.feedbackUI.ready({ title: 'Rùa và Thỏ', pages: [] });
+                window.feedbackUI.view('ar');
+                window.feedbackUI.scan(true);
+                window.feedbackUI.notice('Tiếp tục bằng cách quét trang 2.');
+            });
+            await expect(page.locator('#feedback')).toBeVisible();
+            await expect(page.locator('#feedback-retry')).toBeHidden();
+            await expect(page.locator('#retry-media')).toBeHidden();
+            await expect(page.locator('#error')).toHaveAttribute('role', 'status');
+            await page.evaluate(() => {
+                window.feedbackUI.notice('');
+                window.feedbackUI.status('Hướng camera vào trang 2.', { persistent: true });
+            });
+            await expect(page.locator('#feedback')).toBeHidden();
+            await expect(page.locator('#status')).toHaveText('Hướng camera vào trang 2.');
+            await page.screenshot({ path: info.outputPath('scan-guidance.png') });
+            await page.evaluate(() =>
+                window.feedbackUI.notice('Không mở được trang.', {
+                    kind: 'error',
+                    action: 'retry',
+                }),
+            );
+            await expect(page.locator('#feedback-retry')).toBeVisible();
+            await expect(page.locator('#retry-media')).toBeHidden();
+            await expect(page.locator('#error')).toHaveAttribute('role', 'alert');
+            await page.evaluate(() =>
+                window.feedbackUI.notice('Chạm để cho phép phát âm thanh.', {
+                    kind: 'error',
+                    action: 'media',
+                    mediaPermission: true,
+                }),
+            );
+            await expect(page.locator('#feedback-retry')).toBeHidden();
+            await expect(page.locator('#retry-media')).toBeVisible();
+            await expect(page.locator('#retry-media')).toHaveText('Chạm để bật âm thanh');
+            await page.evaluate(() =>
+                window.feedbackUI.notice('Bạn đã hoàn thành chuyến khám phá!'),
+            );
+            await expect(page.locator('#feedback-retry')).toBeHidden();
+            await expect(page.locator('#retry-media')).toBeHidden();
         });
     });
 }
