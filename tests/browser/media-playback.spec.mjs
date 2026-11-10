@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test.use({ launchOptions: { args: ['--autoplay-policy=document-user-activation-required'] } });
 
-test('native audio keeps playing across page changes after a reader gesture', async ({
+test('native audio primed on entry plays after asynchronous loading and page changes', async ({
     page,
     baseURL,
 }) => {
@@ -59,14 +59,19 @@ test('native audio keeps playing across page changes after a reader gesture', as
                 { notice: (message) => window.testMediaNotices.push(message), link() {}, log() {} },
                 { background: false, mediaPool: window.testMediaPool },
             );
-        window.testAudioScene = await window.makeAudioScene();
-        window.testAudioScene.start();
         const button = document.createElement('button');
-        button.textContent = 'Cho phép âm thanh thử';
-        button.addEventListener('click', () => window.testAudioScene.retryMedia());
+        button.textContent = 'Bắt đầu với âm thanh';
+        button.addEventListener('click', () => window.testMediaPool.primeAudio(['narration']));
         document.body.append(button);
     }, baseURL);
-    await page.getByRole('button', { name: 'Cho phép âm thanh thử' }).click();
+    await page.getByRole('button', { name: 'Bắt đầu với âm thanh' }).click();
+    await expect
+        .poll(() => page.evaluate(() => window.testAudioElements[0]?.getAttribute('src')))
+        .toBe(null);
+    await page.evaluate(async () => {
+        window.testAudioScene = await window.makeAudioScene();
+        window.testAudioScene.start();
+    });
     await expect.poll(() => page.evaluate(() => window.testAudioElements[0].paused)).toBe(false);
     await page.evaluate(async () => {
         await window.testAudioScene.leave();

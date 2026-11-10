@@ -241,8 +241,8 @@
         transform: scale(0.97);
     }
 }
-/* Keep the viewport measurable while the loading screen covers the scene. */
-#main[data-loading="true"] > :not(#reader-loading),
+/* Keep the viewport measurable. A dialog opened by onPageEnter must stay visible and focusable. */
+#main[data-loading="true"] > :not(#reader-loading, dialog[open]),
 body:has(#main[data-loading="true"]) > a[href="#start"] {
     @apply invisible pointer-events-none;
 }

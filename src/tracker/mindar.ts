@@ -2,6 +2,7 @@ import { cameraError, requestCameraStream } from '../camera-access';
 import { fetchBytes } from '../shared/api';
 import { GroupSearch } from './group-search';
 import { TargetCache } from './target-cache';
+import { TrackedPose } from './tracked-pose';
 import { TRACKING_OPTIONS } from './tracking-config';
 
 type Update = { type: string; targetIndex?: number; worldMatrix?: number[] | null };
@@ -22,7 +23,7 @@ interface Controller {
     dispose(): void;
     worker?: Worker;
     tracker?: TargetTracker;
-    /** Pinned MindAR 1.2.5 warmup state; never used as a recognized pose. */
+    /** Pinned MindAR 1.2.5 state distinguishes fresh tracking from its held matrix. */
     trackingStates?: { isTracking: boolean }[];
 }
 export interface TrackingGroup {
@@ -121,6 +122,14 @@ export async function startTracking(
         processing = false;
     let current: number | undefined;
     let dimensions: [number, number][] = [];
+    const pose = new TrackedPose((target, world) => {
+        if (stopped || current === undefined || !dimensions[target]) return;
+        if (world) {
+            search?.recognized(current);
+            prefetchNext();
+        } else search?.lost(current);
+        hooks.update(current, target, world, dimensions[target]);
+    });
     let inputWidth = 0,
         inputHeight = 0;
     let pauseResolve: (() => void) | undefined;
@@ -161,6 +170,7 @@ export async function startTracking(
         stopped = true;
         signal.removeEventListener('abort', stop);
         search?.stop();
+        pose.reset();
         pauseReject?.(new Error('Đã dừng camera.'));
         pauseResolve = undefined;
         pauseReject = undefined;
@@ -246,15 +256,10 @@ export async function startTracking(
                     data.targetIndex !== undefined &&
                     dimensions[data.targetIndex]
                 ) {
-                    if (data.worldMatrix) {
-                        search?.recognized(current);
-                        prefetchNext();
-                    } else search?.lost(current);
-                    hooks.update(
-                        current,
+                    pose.update(
                         data.targetIndex,
                         data.worldMatrix ?? null,
-                        dimensions[data.targetIndex],
+                        controller?.trackingStates?.[data.targetIndex]?.isTracking === true,
                     );
                 }
             },
@@ -271,6 +276,7 @@ export async function startTracking(
             hooks.searching();
             current = undefined;
             dimensions = [];
+            pose.reset();
             const old = controller.tracker;
             try {
                 dimensions = controller.addImageTargetsFromBuffer(buffer).dimensions;

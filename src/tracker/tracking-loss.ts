@@ -1,4 +1,4 @@
-export const TRACKING_LOSS_GRACE_MS = 180;
+export const TRACKING_LOSS_GRACE_MS = 450;
 
 /** Debounce brief lost/found pairs, without extending a real loss on repeated callbacks. */
 export class TrackingLoss {

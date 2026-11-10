@@ -1,8 +1,10 @@
 import { CameraAccess, cameraError } from './camera-access';
+import { createExternalLinkDialog } from './external-link';
 import type { ReaderNoticeOptions } from './reader-feedback';
 import { createReaderUI, setMuteIcon } from './reader-ui';
 import { installReportForm } from './report-form';
 import { AssetCache } from './scene-core/asset-cache';
+import { audioPlaybackSlots } from './scene-core/audio-slots';
 import type { PageRuntime } from './scene-core/buildScene';
 import { MediaElementPool } from './scene-core/MediaElementPool';
 import type { Stage } from './scene-core/Stage';
@@ -22,7 +24,6 @@ import type { Manifest, ManifestPage } from './shared/contracts/manifest.schema'
 import type { WorkflowNavigation } from './shared/contracts/scene.schema';
 import { PreviewMessageSchema, RunMessageSchema, trustedMessage } from './shared/protocol';
 import { startReadingEvents } from './shared/reading-events';
-import { TrackingLoss } from './tracker/tracking-loss';
 
 const get = <T extends HTMLElement>(id: string) => {
     const element = document.getElementById(id);
@@ -82,9 +83,9 @@ let loading: AbortController | null = null,
     cameraGroup: number | null = null;
 let tracker: Awaited<ReturnType<typeof import('./tracker/mindar').startTracking>> | null = null;
 const cameraAccess = new CameraAccess();
-const trackingLoss = new TrackingLoss();
 const sceneBytes = new AssetCache();
 const mediaPool = new MediaElementPool();
+const externalLink = createExternalLinkDialog();
 const retiring = new Set<PageRuntime>();
 const matrices = new Map<string, { world: number[]; dimensions: [number, number] }>();
 let cameraTask: Promise<void> | null = null,
@@ -120,7 +121,6 @@ function controls() {
     ui.navigation(index, mode === 'ar', tracked);
 }
 function clearCamera(keepPrepared = false) {
-    trackingLoss.cancel();
     if (!keepPrepared) cameraAccess.clear();
     if (lossTimer) clearTimeout(lossTimer);
     lossTimer = null;
@@ -150,7 +150,7 @@ function stop(message = 'Đã dừng xem. Bấm Bắt đầu để xem lại.') 
     viewport.hidden = true;
     get('tap-section').hidden = true;
     get('rule-section').hidden = true;
-    get('external-link').hidden = true;
+    externalLink.close();
     controls();
     ui.loading();
     ui.pageLoading();
@@ -238,7 +238,6 @@ function buttons(page: ManifestPage) {
     get('logs').hidden = !embedded;
 }
 function showTracked(world: number[], dimensions: [number, number], page: ManifestPage) {
-    trackingLoss.cancel();
     if (!runtime) return;
     stage?.track(targetToPageMatrix(world, ...dimensions, page));
     if (!tracked) {
@@ -258,26 +257,20 @@ function showTracked(world: number[], dimensions: [number, number], page: Manife
         status(`Đã nhận diện trang ${index + 1}. Chạm để khám phá.`);
     }
 }
-function lostTarget(immediate = false) {
+function lostTarget() {
     if (!tracked) return;
-    const confirm = () => {
-        if (!tracked) return;
-        tracked = false;
-        runtime?.markerLost();
-        stage?.track(null);
-        ui.scan(false);
-        controls();
-        status('Đưa camera trở lại trang sách.');
-        if (lossTimer) clearTimeout(lossTimer);
-        const previous = runtime;
-        lossTimer = setTimeout(() => {
-            if (!tracked && previous === runtime) runtime?.suspend();
-        }, 600);
-    };
-    if (immediate) {
-        trackingLoss.cancel();
-        confirm();
-    } else trackingLoss.defer(confirm);
+    // The tracker has already confirmed its single bounded loss deadline.
+    tracked = false;
+    runtime?.markerLost();
+    stage?.track(null);
+    ui.scan(false);
+    controls();
+    status('Đưa camera trở lại trang sách.');
+    if (lossTimer) clearTimeout(lossTimer);
+    const previous = runtime;
+    lossTimer = setTimeout(() => {
+        if (!tracked && previous === runtime) runtime?.suspend();
+    }, 600);
 }
 async function ensureCamera(page: ManifestPage) {
     if (!book || page.group === undefined || tracker) return;
@@ -329,7 +322,7 @@ async function ensureCamera(page: ManifestPage) {
                 },
                 searching: () => {
                     if (abort.signal.aborted) return;
-                    lostTarget(true);
+                    lostTarget();
                     matrices.clear();
                     cameraGroup = null;
                     if (!runtimeStarted) status('Đang tìm trang trong sách…');
@@ -361,7 +354,6 @@ async function ensureCamera(page: ManifestPage) {
 }
 async function activate(next: number) {
     if (!book?.pages[next]) return;
-    trackingLoss.cancel();
     const sequence = ++generation;
     loading?.abort();
     const abort = new AbortController();
@@ -387,7 +379,7 @@ async function activate(next: number) {
         ui.scan(true);
     get('tap-section').hidden = true;
     get('rule-section').hidden = true;
-    get('external-link').hidden = true;
+    externalLink.close();
     try {
         if (old) {
             retiring.add(old);
@@ -446,10 +438,11 @@ async function activate(next: number) {
                     readingEvents?.record({ type: 'TAP', pageId: page.pageId, objectId });
                 },
                 link: (url) => {
-                    get<HTMLAnchorElement>('link').href = url;
-                    get<HTMLAnchorElement>('link').textContent =
-                        `Mở liên kết: ${new URL(url).hostname}`;
-                    get('external-link').hidden = false;
+                    if (abort.signal.aborted || sequence !== generation) return;
+                    if (!externalLink.show(url))
+                        notice('Liên kết không hợp lệ. Hãy thử nội dung khác trong sách.', {
+                            kind: 'error',
+                        });
                 },
             },
             { background: mode !== 'ar', bytes: sceneBytes, mediaPool },
@@ -550,6 +543,7 @@ function workflowNavigate(navigation: WorkflowNavigation) {
 function startReading() {
     automaticHops = 0;
     if (!book) return;
+    primeAudio();
     clearCamera();
     mode = '3d';
     stage?.setAR(null);
@@ -590,6 +584,7 @@ async function requestCamera() {
         get('main').dataset.cameraPermission === 'requesting'
     )
         return;
+    primeAudio();
     const sequence = generation;
     ui.cameraPermission('requesting');
     try {
@@ -624,12 +619,22 @@ get('camera-access-back').addEventListener('click', () => {
     notice('');
     stop('');
 });
+function primeAudio() {
+    if (!muted && book) mediaPool.primeAudio(audioPlaybackSlots(book.pages));
+}
 function setMuted(value: boolean) {
     muted = value;
     get('mute').setAttribute('aria-pressed', String(muted));
     get<HTMLInputElement>('camera-access-sound').checked = !muted;
     setMuteIcon(muted);
     runtime?.mute(muted);
+    if (!muted) {
+        primeAudio();
+        if (mode !== 'ar' || tracked) {
+            runtime?.retryMedia();
+            if (!get('retry-media').hidden) notice('');
+        }
+    }
 }
 get('camera-access-sound').addEventListener('change', () => {
     setMuted(!get<HTMLInputElement>('camera-access-sound').checked);
@@ -667,6 +672,7 @@ get('retry-media').addEventListener('click', () => {
         ui.status('Hướng camera vào trang trước khi phát âm thanh/video.', { persistent: true });
         return;
     }
+    primeAudio();
     runtime?.retryMedia();
     notice('');
 });
@@ -691,9 +697,6 @@ get('next').addEventListener('click', () => {
         index = Math.min((book?.pages.length || 1) - 1, index + 1);
         controls();
     }
-});
-get('dismiss-link').addEventListener('click', () => {
-    get('external-link').hidden = true;
 });
 viewport.addEventListener('ar-content-visibility', (event) => {
     if (mode !== 'ar' || !tracked || !runtime) return;

@@ -317,32 +317,72 @@ for (const presentation of [
             const controller = window.__arControllers[0];
             const update = controller.onUpdate;
             const root = window.__arStage.anchor.children[0];
+            const runtime = window.__arStage.runtime;
+            const calls = { start: 0, resume: 0, markerFound: 0, markerLost: 0 };
+            const methods = Object.fromEntries(
+                Object.keys(calls).map((key) => [key, runtime[key]]),
+            );
+            for (const key of Object.keys(calls))
+                runtime[key] = (...args) => {
+                    calls[key]++;
+                    return methods[key].apply(runtime, args);
+                };
+            const before = window.__arStage.anchor.matrix.toArray();
             controller.onUpdate = (data) => {
-                if (data.type !== 'updateMatrix') update(data);
+                if (data.type !== 'updateMatrix') return update(data);
+                const state = controller.trackingStates[9];
+                const tracking = state.isTracking;
+                state.isTracking = false;
+                try {
+                    update({ ...data, targetIndex: 9, worldMatrix: state.trackingMatrix });
+                } finally {
+                    state.isTracking = tracking;
+                }
             };
             try {
-                update({ type: 'updateMatrix', targetIndex: 9, worldMatrix: null });
-                await new Promise((resolve) => setTimeout(resolve, 50));
-                return {
+                controller.onUpdate({ type: 'updateMatrix', targetIndex: 9 });
+                await new Promise((resolve) => setTimeout(resolve, 220));
+                const held = {
                     visible: window.__arStage.anchor.visible,
                     found: document.getElementById('main').dataset.tracking,
                     sameScene: window.__arStage.anchor.children[0] === root,
+                    samePose:
+                        JSON.stringify(before) ===
+                        JSON.stringify(window.__arStage.anchor.matrix.toArray()),
                 };
+                controller.onUpdate = update;
+                await new Promise((resolve) => setTimeout(resolve, 100));
+                return { ...held, calls };
             } finally {
                 controller.onUpdate = update;
+                for (const key of Object.keys(calls)) runtime[key] = methods[key];
             }
         });
-        expect(grace).toEqual({ visible: true, found: 'found', sameScene: true });
+        expect(grace).toEqual({
+            visible: true,
+            found: 'found',
+            sameScene: true,
+            samePose: true,
+            calls: { start: 0, resume: 0, markerFound: 0, markerLost: 0 },
+        });
         await expect(page.locator('#reader-context')).toHaveText('Trang 20 — Đã nhận diện');
         const realLoss = await page.evaluate(async () => {
             const controller = window.__arControllers[0];
             const update = controller.onUpdate;
             controller.onUpdate = (data) => {
-                if (data.type !== 'updateMatrix') update(data);
+                if (data.type !== 'updateMatrix') return update(data);
+                const state = controller.trackingStates[9];
+                const tracking = state.isTracking;
+                state.isTracking = false;
+                try {
+                    update({ ...data, targetIndex: 9, worldMatrix: state.trackingMatrix });
+                } finally {
+                    state.isTracking = tracking;
+                }
             };
             try {
-                update({ type: 'updateMatrix', targetIndex: 9, worldMatrix: null });
-                await new Promise((resolve) => setTimeout(resolve, 300));
+                controller.onUpdate({ type: 'updateMatrix', targetIndex: 9 });
+                await new Promise((resolve) => setTimeout(resolve, 550));
                 return window.__arStage.anchor.visible;
             } finally {
                 controller.onUpdate = update;

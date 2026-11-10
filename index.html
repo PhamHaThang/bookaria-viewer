@@ -759,21 +759,53 @@
                 <h2>Chạy thử quy tắc</h2>
                 <div id="rules"></div>
             </section>
-            <div
+            <dialog
                 id="external-link"
-                class="absolute top-1/2 left-1/2 z-6 flex w-[min(420px,calc(100%-40px))] -translate-1/2 flex-wrap items-center gap-3 rounded-[20px] p-6 shadow-reader [&>p]:w-full [&>p]:text-sm reader-surface"
-                hidden
+                class="reader-dialog max-h-[calc(100dvh-24px)] w-[min(440px,calc(100vw-32px))]"
+                aria-labelledby="external-link-title"
+                aria-describedby="external-link-description external-link-host"
             >
-                <p>Mở liên kết bên ngoài?</p>
-                <a
-                    id="link"
-                    class="reader-primary link-button reader-button"
-                    href="/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    >Mở liên kết</a
-                ><button id="dismiss-link" type="button" class="reader-button">Ở lại sách</button>
-            </div>
+                <div class="flex items-start justify-between gap-3 px-5 pt-5">
+                    <h2 id="external-link-title" class="pt-2 leading-7">Mở liên kết bên ngoài?</h2>
+                    <button
+                        class="reader-icon shrink-0"
+                        type="button"
+                        data-close-dialog
+                        aria-label="Đóng liên kết bên ngoài"
+                    >
+                        <i data-icon="X"></i>
+                    </button>
+                </div>
+                <div class="flex min-w-0 flex-col gap-4 px-5 pb-5">
+                    <p id="external-link-description" class="text-base leading-6 text-reader-muted">
+                        Liên kết sẽ mở trong tab mới. Bạn có thể quay lại sách để tiếp tục đọc.
+                    </p>
+                    <div class="min-w-0 border-y border-reader-line py-4">
+                        <p id="external-link-host" class="wrap-anywhere text-base font-semibold leading-6"></p>
+                        <p
+                            id="external-link-address"
+                            class="mt-2 max-h-16 overflow-y-auto overscroll-contain wrap-anywhere text-sm leading-5 text-reader-muted"
+                        ></p>
+                    </div>
+                    <div class="grid gap-2 min-[420px]:grid-cols-2">
+                        <button
+                            id="dismiss-link"
+                            type="button"
+                            class="reader-button reader-outline"
+                            data-close-dialog
+                            autofocus
+                        >Ở lại sách</button>
+                        <a
+                            id="link"
+                            href="/"
+                            class="reader-button reader-primary whitespace-nowrap"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            referrerpolicy="no-referrer"
+                        ><i data-icon="ExternalLink"></i>Mở liên kết</a>
+                    </div>
+                </div>
+            </dialog>
             <details
                 id="logs"
                 class="absolute bottom-[110px] left-4 z-3 max-h-40 w-[min(300px,40vw)] overflow-auto rounded-xl bg-reader-surface p-2"

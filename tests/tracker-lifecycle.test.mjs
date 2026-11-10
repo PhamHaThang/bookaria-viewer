@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { Matrix4 } from 'three';
 import { startTracking } from '../src/tracker/mindar.ts';
 import { TRACKING_OPTIONS } from '../src/tracker/tracking-config.ts';
 
@@ -38,6 +39,7 @@ class FakeController {
     }
     dummyRun() {}
     processVideo() {
+        this.trackingStates = [{ isTracking: true }];
         this.timer = setInterval(() => {
             this.inFrame = true;
             this.options.onUpdate({ type: 'processDone' });
@@ -191,6 +193,42 @@ test('retargeting reuses the camera/controller, waits for frame completion and f
         f.restore();
     }
 });
+test('tracker filters pose spikes and resets smoothing when the target group changes', async () => {
+    const f = install(),
+        abort = new AbortController();
+    let session;
+    try {
+        session = await startTracking({ prepend() {} }, groups, 0, abort.signal, hooks(f.state));
+        const controller = f.state.controllers[0];
+        const emit = (x) =>
+            controller.options.onUpdate({
+                type: 'updateMatrix',
+                targetIndex: 0,
+                worldMatrix: new Matrix4().makeTranslation(x, 0, -1000).toArray(),
+            });
+        emit(0);
+        assert.equal(f.state.updates.at(-1)[2][12], 0);
+        controller.trackingStates[0].isTracking = false;
+        emit(100);
+        assert.equal(f.state.updates.length, 1, 'Held vendor matrices are not fresh tracking');
+        controller.trackingStates[0].isTracking = true;
+        emit(500);
+        assert.equal(f.state.updates.length, 1, 'A rejected spike starts a hold, not a loss');
+        emit(1);
+        assert.ok(f.state.updates.at(-1)[2][12] < 1);
+        session.prefer(1);
+        await waitFor(() => f.state.selected.length === 2);
+        emit(500);
+        assert.equal(f.state.updates.at(-1)[0], 1);
+        assert.equal(f.state.updates.at(-1)[2][12], 500);
+    } finally {
+        abort.abort();
+        session?.stop();
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        f.restore();
+    }
+});
+
 test('a camera granted after cancellation is closed immediately without loading a controller', async () => {
     const f = install(),
         abort = new AbortController();
