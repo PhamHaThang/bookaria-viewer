@@ -406,7 +406,9 @@ export async function buildScene(
                     }
             });
             const start = visibilityProgress.get(node.spec.id) ?? (node.root.visible ? 1 : 0);
-            node.root.visible = true;
+            // Hiding an already hidden object must not briefly satisfy a visible condition.
+            node.root.visible = visible || start > 0;
+            runner.progress.notify();
             try {
                 const completed = await tween(
                     `${node.spec.id}:visible`,
@@ -423,6 +425,7 @@ export async function buildScene(
                 );
                 if (completed && visibilityGeneration.get(node.spec.id) === generation) {
                     node.root.visible = visible;
+                    runner.progress.notify();
                     visibilityProgress.set(node.spec.id, visible ? 1 : 0);
                 }
             } finally {
