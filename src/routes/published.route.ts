@@ -149,7 +149,16 @@ export class PublishedRouteManager {
 
                 const pdf = get<HTMLAnchorElement>('published-pdf');
                 pdf.hidden = !info.printPdfUrl;
-                if (info.printPdfUrl) pdf.href = info.printPdfUrl;
+                if (info.printPdfUrl) {
+                    const studioOrigin =
+                        import.meta.env.VITE_STUDIO_ORIGIN || 'http://localhost:5173';
+                    const readerUrl = new URL('/library', studioOrigin);
+                    readerUrl.searchParams.set('book', slug);
+                    readerUrl.searchParams.set('pdf', '1');
+                    pdf.href = readerUrl.href;
+                } else {
+                    pdf.removeAttribute('href');
+                }
                 get('publication-info').hidden = false;
                 this.viewer.status('');
 
