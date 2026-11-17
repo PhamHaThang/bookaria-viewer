@@ -34,7 +34,6 @@ const question = {
     ],
     correctChoiceId: 'a',
 };
-
 test('conditions follow only their selected port, merges execute once, navigation ends the branch', async () => {
     const rule = parsed(
         [

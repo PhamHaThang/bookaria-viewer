@@ -59,11 +59,14 @@ import {
     CreateBookResultSchema,
     ListBooksQuerySchema,
     StatsQuerySchema,
+    StudioReadingStatsSchema,
     TemplateSummarySchema,
     TrashBookItemSchema,
+    TrashBooksQuerySchema,
     UpdateBookBodySchema,
     UpdateVisibilityBodySchema,
 } from './api/books.schema';
+import { InteractionAiBodySchema, InteractionAiResultSchema } from './api/interaction-ai.schema';
 import {
     ChangePasswordBodySchema,
     MarkNotificationsReadBodySchema,
@@ -357,7 +360,7 @@ export const routes: Route[] = [
         path: '/books/trash',
         access: 'author',
         summary: 'Sách trong thùng rác (đăng ký route trước `/books/:bookId`)',
-        query: PaginationQuerySchema,
+        query: TrashBooksQuerySchema,
         responses: { 200: pagedResponse(TrashBookItemSchema) },
     },
     {
@@ -462,6 +465,14 @@ export const routes: Route[] = [
         access: 'author',
         summary: 'Danh sách sách mẫu',
         responses: { 200: dataResponse(z.array(TemplateSummarySchema)) },
+    },
+    {
+        id: 'getStudioReadingStats',
+        method: 'GET',
+        path: '/studio/reading-stats',
+        access: 'author',
+        summary: 'Lượt mở sách 14 ngày gần đây và ba sách được mở nhiều nhất của tác giả',
+        responses: { 200: dataResponse(StudioReadingStatsSchema) },
     },
     {
         id: 'getBooksByBookIdStats',
@@ -595,6 +606,24 @@ export const routes: Route[] = [
         body: SaveSceneBodySchema,
         responses: { 200: dataResponse(SaveSceneResultSchema) },
         errors: ['NOT_FOUND', 'REVISION_CONFLICT', 'FILE_TOO_LARGE'],
+    },
+    {
+        id: 'postPagesByPageIdInteractionProposals',
+        method: 'POST',
+        path: '/pages/:pageId/interaction-proposals',
+        access: 'author',
+        summary: 'Tạo đề xuất tương tác AI cho bản nháp, không lưu cảnh',
+        params: params.pageId,
+        body: InteractionAiBodySchema,
+        responses: { 200: dataResponse(InteractionAiResultSchema) },
+        errors: [
+            'NOT_FOUND',
+            'REVISION_CONFLICT',
+            'VALIDATION_ERROR',
+            'RATE_LIMITED',
+            'FILE_TOO_LARGE',
+            'AI_UNAVAILABLE',
+        ],
     },
     {
         id: 'postPagesByPageIdMarkerRescore',
