@@ -57,9 +57,9 @@ test('published reader loads frozen manifest, omits credentials and rechecks ava
         assert.equal(loaded.manifest.title, 'Frozen title');
         assert.equal(calls.length, 3);
         assert.equal(calls[1].url, info.manifestUrl);
-        for (const { options } of calls) {
+        for (const { url, options } of calls) {
             assert.equal(options.credentials, 'omit');
-            assert.equal(options.cache, 'no-store');
+            assert.equal(options.cache, url === info.manifestUrl ? 'default' : 'no-store');
             assert.equal(options.referrerPolicy, 'no-referrer');
         }
     } finally {

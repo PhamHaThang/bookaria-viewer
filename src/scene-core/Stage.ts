@@ -31,6 +31,7 @@ export class Stage {
     private arProjection: number[] | null = null;
     private videoSize = { width: 1, height: 1 };
     private last = 0;
+    private dirty = true;
     private navigation: ReadingNavigation;
     private navigated = false;
     private nextVisibilityCheck = 0;
@@ -38,7 +39,7 @@ export class Stage {
     private reveal: Animation | undefined;
     constructor(private container: HTMLElement) {
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+        this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
         this.renderer.outputColorSpace = THREE.SRGBColorSpace;
         this.renderer.domElement.setAttribute('aria-label', 'Nội dung 3D của trang');
         this.renderer.domElement.setAttribute('role', 'img');
@@ -46,6 +47,7 @@ export class Stage {
         this.camera.up.set(0, 0, 1);
         this.camera.position.set(0, -0.8, 3);
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+        this.controls.addEventListener('change', this.invalidate);
         this.navigation = new ReadingNavigation(
             this.renderer.domElement,
             this.camera,
@@ -63,10 +65,21 @@ export class Stage {
         this.resize();
         this.renderer.domElement.addEventListener('webglcontextlost', this.contextLost);
         this.renderer.setAnimationLoop((time) => {
+            if (document.hidden) {
+                this.last = 0;
+                return;
+            }
+            if (this.last && time - this.last < 1000 / 30 - 0.5) return;
             const delta = this.last ? Math.min(0.1, (time - this.last) / 1000) : 0;
             this.last = time;
-            if (!this.arProjection) this.controls.update();
-            this.runtime?.update(delta, this.camera);
+            const moved = !this.arProjection && this.controls.update();
+            const active = this.anchor.visible && this.runtime;
+            if (!this.dirty && !moved && !(active && (this.arProjection || active.needsFrame()))) {
+                if (active) active.advanceHiddenAnimations(delta);
+                return;
+            }
+            this.dirty = false;
+            if (active) active.update(delta, this.camera);
             this.renderer.render(this.scene, this.camera);
             if (
                 this.arProjection &&
@@ -85,6 +98,9 @@ export class Stage {
             }
         });
     }
+    private invalidate = () => {
+        this.dirty = true;
+    };
     private contextLost = (event: Event) => {
         event.preventDefault();
         this.container.dispatchEvent(
@@ -94,6 +110,7 @@ export class Stage {
         );
     };
     private tap = (event: PointerEvent) => {
+        this.dirty = true;
         if (!this.runtime || !this.anchor.visible) return;
         const box = this.renderer.domElement.getBoundingClientRect();
         const pointer = new THREE.Vector2(
@@ -118,6 +135,7 @@ export class Stage {
         }
     };
     setRuntime(runtime: PageRuntime | null, page?: ManifestPage) {
+        this.dirty = true;
         this.anchor.clear();
         this.runtime = runtime;
         this.contentVisibility = null;
@@ -164,6 +182,7 @@ export class Stage {
         };
     }
     resetView() {
+        this.dirty = true;
         if (this.arProjection) return;
         stopSceneOrbit(this.controls);
         this.navigated = false;
@@ -183,6 +202,7 @@ export class Stage {
         this.runtime?.update(0, this.camera);
     }
     setAR(projection: number[] | null, width = 1, height = 1) {
+        this.dirty = true;
         this.arProjection = projection;
         this.videoSize = { width, height };
         this.navigation.setOrbit(!projection);
@@ -205,6 +225,7 @@ export class Stage {
         if (!projection) this.resetView();
     }
     track(matrix: THREE.Matrix4 | null) {
+        this.dirty = true;
         this.anchor.visible = Boolean(matrix);
         if (matrix) {
             this.anchor.matrix.copy(matrix);
@@ -212,6 +233,7 @@ export class Stage {
         } else this.contentVisibility = null;
     }
     private resize() {
+        this.dirty = true;
         const width = this.container.clientWidth,
             height = this.container.clientHeight;
         if (!width || !height) return;
@@ -232,6 +254,7 @@ export class Stage {
         this.renderer.setAnimationLoop(null);
         this.resizeObserver.disconnect();
         this.navigation.dispose();
+        this.controls.removeEventListener('change', this.invalidate);
         this.controls.dispose();
 
         this.renderer.domElement.removeEventListener('webglcontextlost', this.contextLost);

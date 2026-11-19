@@ -59,6 +59,14 @@ Trên máy tính: kéo chuột trái để xoay, chuột phải hoặc `Space` +
 
 Chỉ luồng sách đã xuất bản ghi sự kiện đọc ẩn danh theo lô và có báo cáo nội dung. Preview và embed không gửi thống kê đọc hoặc hiển thị form báo cáo.
 
+## Cache tài nguyên
+
+Viewer giữ file ảnh/model đã tải trong RAM của phiên sách: tối đa **24 MiB** tổng cộng, mỗi file tối đa **8 MiB**. File lớn hơn vẫn tải bình thường nhưng không được giữ lại. Khi đầy, cache loại file ít được dùng gần đây nhất.
+
+Cache giúp trang cũ hoặc các trang dùng chung tài nguyên không phải tải lại file. Mỗi trang vẫn tạo và giải phóng texture/model riêng, nên vẫn cần thời gian giải mã và chuẩn bị GPU. Video/audio, API và PDF không đi qua cache này; Viewer không tự tải toàn bộ sách trong nền.
+
+Dữ liệu được giữ khi về bìa cùng sách, xóa khi nạp snapshot/phiên bản mới, sách không còn khả dụng, preview hết hạn hoặc rời trang Viewer. Không dùng localStorage, IndexedDB hoặc service worker để lưu file sách.
+
 ## Kiểm tra và build
 
 ```powershell
@@ -72,6 +80,8 @@ pnpm build
 - `build`: tạo ứng dụng triển khai trong `dist/`.
 
 Thử thủ công trên máy tính và điện thoại: mở sách, chuyển trang, quay về bìa, đổi sáng/tối, thử âm thanh; sau đó thử cấp quyền/từ chối camera và nhận diện marker. Kiểm tra cả trường hợp mất dấu và đưa camera trở lại. AR cần nghiệm thu trên thiết bị thật, đặc biệt iPhone/Android.
+
+Bộ kiểm thử AR bằng MindAR thật và quy trình nghiệm thu: [Kiểm thử AR](docs/AR-TESTING.md). Chạy bằng `pnpm test:ar`; cần Chrome và bộ marker seed của backend, không cần backend đang chạy.
 
 ## Mã nguồn và đồng bộ
 
@@ -100,6 +110,17 @@ pnpm contract:verify
 `contract:check` so sánh với backend; `contract:verify` kiểm tra snapshot hiện có và phiên bản Zod mà không cần repo backend. Có thể chỉ định đường dẫn backend bằng `pnpm contract:sync --backend D:/path/to/bookaria-backend`.
 
 Không sửa hoặc định dạng lại thư viện trong `public/vendor/`: `pnpm vendor:verify` kiểm tra checksum của các tệp này. Tracker/TensorFlow chỉ được nạp khi dùng camera; renderer được nạp khi bắt đầu xem nội dung.
+
+## Render và video
+
+Chế độ đọc chỉ vẽ lại khi camera/nội dung thay đổi hoặc có hoạt ảnh/video đang
+chạy. Render đang hoạt động giới hạn 30 FPS, pixel ratio tối đa 1.5; AR tiếp tục
+vẽ khi đang bám marker và dừng vẽ khi anchor đã ẩn. Theo dõi marker vẫn do MindAR
+xử lý riêng. Camera, hoạt ảnh và video liên tục vẫn tiêu thụ CPU/GPU.
+
+Video dừng có biểu tượng phát. Chạm video để phát/dừng nếu tác giả chưa gán luồng
+`onTap` riêng; luồng do tác giả gán vẫn được ưu tiên. File bất biến dùng HTTP cache
+của trình duyệt; kiểm tra trạng thái sách và API preview vẫn dùng `no-store`.
 
 ## Triển khai
 
