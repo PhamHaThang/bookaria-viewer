@@ -970,6 +970,7 @@ export class BookViewer {
 
     dispose() {
         this.stop();
+        this.ui.dispose();
         this.mediaPool.dispose();
         for (const cleanup of this.listeners) cleanup();
         this.listeners = [];
