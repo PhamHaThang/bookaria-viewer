@@ -45,19 +45,22 @@
                 aria-live="polite"
                 aria-busy="true"
                 data-loading-screen="full"
-                class="fixed inset-0 z-10 flex min-h-dvh w-full flex-col items-center justify-center gap-8 bg-reader-surface px-6 py-12 text-center"
+                class="fixed inset-0 z-10 flex min-h-dvh w-full flex-col items-center justify-center gap-3 bg-reader-surface px-6 py-6 text-center"
             >
                 <div aria-hidden="true" class="flex flex-col items-center gap-6">
-                    <img
-                        src="/brand/bookaria-symbol.svg"
-                        alt=""
-                        width="96"
-                        height="49"
-                        class="h-auto w-24 object-contain motion-safe:animate-[bookaria-loading-pulse_1.8s_ease-in-out_infinite] dark:invert"
-                    >
+                    <span aria-hidden="true" data-boki-state="loading" class="reader-mascot" style="width:80px;height:80px">
+                        <picture class="reader-mascot-light">
+                          <source media="(prefers-reduced-motion: reduce)" srcset="/brand/mascot/light-loading-poster.svg">
+                          <img loading="lazy" src="/brand/mascot/light-loading-loop.svg" alt="" width="80" height="80" onload="this.dataset.loadingStarted = performance.now()">
+                        </picture>
+                        <picture class="reader-mascot-dark">
+                          <source media="(prefers-reduced-motion: reduce)" srcset="/brand/mascot/dark-loading-poster.svg">
+                          <img loading="lazy" src="/brand/mascot/dark-loading-loop.svg" alt="" width="80" height="80" onload="this.dataset.loadingStarted = performance.now()">
+                        </picture>
+                    </span>
                 </div>
-                <p id="reader-loading-message" class="m-0 text-sm text-reader-muted">
-                    Đang mở Bookaria…
+                <p id="reader-loading-message" class="m-0 max-w-md text-sm leading-[22px] text-balance text-reader-muted">
+                    Đang tải tài nguyên…
                 </p>
             </div>
             <div
@@ -286,7 +289,7 @@
                     <div class="text-center">
                         <div
                             id="camera-access-icon"
-                            class="mb-6 flex justify-center text-reader-ink [&>svg]:size-20 [&>svg]:stroke-[1.5] [@media(max-height:700px)]:mb-4 [@media(max-height:700px)]:[&>svg]:size-14 [@media(max-height:540px)_and_(min-width:560px)]:mb-3 [@media(max-height:540px)_and_(min-width:560px)]:[&>svg]:size-12"
+                            class="mb-6 flex items-center justify-center text-reader-ink [&>svg]:size-12 [@media(max-height:700px)]:mb-4 [@media(max-height:540px)_and_(min-width:560px)]:mb-3"
                         >
                             <i data-icon="Camera"></i>
                         </div>
@@ -447,6 +450,7 @@
                 class="group-data-[view=welcome]/reader:bottom-[max(80px,calc(env(safe-area-inset-bottom)+68px))] group-data-[view=welcome]/reader:max-h-[min(160px,30dvh)] group-data-[view=welcome]/reader:overflow-y-auto absolute right-3 bottom-[max(120px,calc(env(safe-area-inset-bottom)+110px))] z-5 flex w-[calc(100%-24px)] items-start gap-3 rounded-2xl border border-reader-line bg-reader-surface p-4 shadow-reader min-[601px]:right-[max(20px,env(safe-area-inset-right))] min-[601px]:w-[min(400px,calc(100%-40px))]"
                 hidden
             >
+                <span id="feedback-icon" aria-hidden="true" class="mt-0.5 shrink-0 text-reader-danger [&>svg]:size-5"><i data-icon="CircleAlert"></i></span>
                 <p
                     id="error"
                     role="alert"
@@ -527,7 +531,7 @@
                 </button>
                 <nav
                     id="page-strip"
-                    class="page-strip col-start-2 flex min-w-0 max-[600px]:hidden pointer-coarse:hidden max-w-[min(600px,calc(100vw-160px))] touch-pan-x items-center gap-2 overflow-x-auto overflow-y-hidden overscroll-contain rounded-[18px] p-2 [scrollbar-color:var(--reader-line)_transparent] [scrollbar-width:thin] min-[601px]:gap-2.5 min-[601px]:p-2.5 group-data-[view=ar]/reader:hidden reader-surface"
+                    class="page-strip col-start-2 flex min-w-0 max-[600px]:hidden pointer-coarse:hidden max-w-[min(600px,calc(100vw-160px))] touch-pan-x items-center gap-2 overflow-x-auto overflow-y-hidden overscroll-contain rounded-[18px] p-2 no-scrollbar min-[601px]:gap-2.5 min-[601px]:p-2.5 group-data-[view=ar]/reader:hidden reader-surface"
                     aria-label="Các trang sách"
                 ></nav>
                 <button
@@ -664,7 +668,7 @@
                 <div
                     class="flex items-center justify-between gap-4 border-b border-reader-line bg-reader-surface px-5 py-3 [@media(max-height:540px)]:py-2"
                 >
-                    <h2 id="help-title" tabindex="-1" autofocus class="outline-none">
+                    <h2 id="help-title" tabindex="-1" autofocus class="flex-1 outline-none">
                         Hướng dẫn đọc sách
                     </h2>
                     <button

@@ -2,6 +2,7 @@ import {
     BookOpen,
     Camera,
     CameraOff,
+    CircleAlert,
     CircleHelp,
     createElement,
     Ellipsis,
@@ -22,6 +23,7 @@ import {
     VolumeX,
     X,
 } from 'lucide';
+import { finishLoadingAnimation } from './loading-completion';
 import { type ReaderNoticeOptions, readerFeedback } from './reader-feedback';
 import type { PublicBook } from './shared/contracts/dto.schema';
 import type { ManifestPage } from './shared/contracts/manifest.schema';
@@ -31,6 +33,7 @@ const icons = {
     Camera,
     CameraOff,
     CircleHelp,
+    CircleAlert,
     FileText,
     Ellipsis,
     ExternalLink,
@@ -80,6 +83,7 @@ export function createReaderUI(choose: (index: number) => void) {
     const main = element('main');
     const menu = element<HTMLDetailsElement>('reader-menu');
     let pageLoadingTimer: ReturnType<typeof setTimeout> | undefined;
+    let loadingCompletion: (() => void) | undefined;
     function pageLoading(message?: string) {
         clearTimeout(pageLoadingTimer);
         element('page-loading').hidden = true;
@@ -93,9 +97,23 @@ export function createReaderUI(choose: (index: number) => void) {
     }
     function loading(message?: string) {
         const active = message !== undefined;
-        main.dataset.loading = String(active);
-        element('reader-loading').hidden = !active;
-        element('reader-loading').setAttribute('aria-busy', String(active));
+        const host = element('reader-loading');
+        if (!active) {
+            if (loadingCompletion || host.hidden) return;
+            loadingCompletion = finishLoadingAnimation(host, () => {
+                main.dataset.loading = 'false';
+                host.hidden = true;
+                host.setAttribute('aria-busy', 'false');
+                scheduleStatusDismiss();
+            });
+            return;
+        }
+        loadingCompletion?.();
+        loadingCompletion = undefined;
+        main.dataset.loading = 'true';
+        host.hidden = false;
+        host.setAttribute('aria-busy', 'true');
+        clearTimeout(statusTimer);
         if (active) {
             pageLoading();
             element('reader-loading-message').textContent = message;
@@ -110,12 +128,24 @@ export function createReaderUI(choose: (index: number) => void) {
     let view: 'welcome' | 'read' | 'ar' | 'camera-access' = 'welcome';
     let statusTimer: ReturnType<typeof setTimeout> | undefined;
     let introductoryHint = false;
+    let timedStatus = false;
+    function scheduleStatusDismiss() {
+        clearTimeout(statusTimer);
+        if (!timedStatus || main.dataset.loading === 'true' || element('reading-status').hidden)
+            return;
+        statusTimer = setTimeout(() => {
+            element('reading-status').hidden = true;
+            introductoryHint = false;
+            timedStatus = false;
+        }, 4000);
+    }
     element('viewport').addEventListener(
         'pointerdown',
         () => {
             if (view !== 'read' || !introductoryHint) return;
             clearTimeout(statusTimer);
             introductoryHint = false;
+            timedStatus = false;
             element('reading-status').hidden = true;
         },
         { capture: true },
@@ -335,6 +365,11 @@ export function createReaderUI(choose: (index: number) => void) {
         return button;
     }
     return {
+        dispose() {
+            loadingCompletion?.();
+            clearTimeout(statusTimer);
+            clearTimeout(pageLoadingTimer);
+        },
         get scanEntry() {
             return currentScanEntry;
         },
@@ -525,21 +560,20 @@ export function createReaderUI(choose: (index: number) => void) {
             element('reading-status').hidden = !message;
             const busy = /Đang (tải|chuẩn bị|mở|chờ)/.test(message);
             element('busy-indicator').hidden = !busy;
-            if (
+            timedStatus = Boolean(
                 !options?.persistent &&
-                !busy &&
-                (view === 'read' || (view === 'ar' && main.dataset.tracking === 'found'))
-            )
-                statusTimer = setTimeout(() => {
-                    element('reading-status').hidden = true;
-                    introductoryHint = false;
-                }, 4000);
+                    !busy &&
+                    message &&
+                    (view === 'read' || (view === 'ar' && main.dataset.tracking === 'found')),
+            );
+            scheduleStatusDismiss();
         },
         notice(message: string, options?: ReaderNoticeOptions) {
             const feedback = readerFeedback(message, options);
             element('error').textContent = message;
             element('error').setAttribute('role', feedback.role);
             element('feedback').hidden = !feedback.visible;
+            element('feedback-icon').hidden = !feedback.visible || options?.kind !== 'error';
             element('retry-media').hidden = !feedback.media;
             element('retry-media').textContent = feedback.mediaLabel;
             element('feedback-retry').hidden = !feedback.retry;

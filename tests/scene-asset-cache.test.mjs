@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { AnimationClip, PerspectiveCamera } from 'three';
 import { AssetCache } from '../src/scene-core/asset-cache.ts';
 import { buildScene } from '../src/scene-core/buildScene.ts';
+import { MODEL_MAX_DOWNLOAD_BYTES } from '../src/shared/contracts/asset.schema.ts';
 import { SceneObjectSchema } from '../src/shared/contracts/scene.schema.ts';
 
 const assetId = '11111111-1111-4111-8111-111111111111';
@@ -52,6 +54,92 @@ function triangleGLB() {
     binary.copy(glb, offset + 8);
     return glb.buffer.slice(glb.byteOffset, glb.byteOffset + glb.byteLength);
 }
+
+test('idle controls sleep and movement wakes them', async () => {
+    const modelPage = page('model');
+    const spec = modelPage.scene.objects[0];
+    spec.controls = { enabled: true };
+    const scene = await buildScene(
+        modelPage,
+        {
+            [assetId]: { type: 'MODEL', url: 'https://example.test/model.glb' },
+        },
+        new AbortController().signal,
+        hooks,
+        {
+            background: false,
+            bytes: new AssetCache(async () => triangleGLB()),
+        },
+    );
+    try {
+        const camera = new PerspectiveCamera();
+        const node = scene.nodes.get('object');
+        scene.start();
+        scene.update(0, camera);
+        assert.equal(scene.needsFrame(), false);
+        scene.modelControls.setMove(1, 0);
+        assert.equal(scene.needsFrame(), true);
+        scene.update(1 / 30, camera);
+        assert.ok(node.root.position.x > 0);
+        scene.modelControls.setMove(0, 0);
+        scene.update(1 / 30, camera);
+        assert.equal(scene.needsFrame(), false);
+    } finally {
+        scene.dispose();
+    }
+});
+
+test('an invisible one-shot clip fires its authored completion without requesting GPU frames', async () => {
+    const modelPage = page('model');
+    const spec = modelPage.scene.objects[0];
+    spec.visible = false;
+    spec.animation = { clip: 'Open', autoplay: true, loop: false };
+    modelPage.scene.interactions = [
+        {
+            id: 'reveal',
+            enabled: true,
+            trigger: { type: 'onAnimationEnd', objectId: spec.id, clip: 'Open' },
+            actions: [
+                {
+                    type: 'setVisible',
+                    objectId: spec.id,
+                    value: true,
+                    durationMs: 0,
+                    delayMsSchema: 0,
+                },
+            ],
+        },
+    ];
+    const scene = await buildScene(
+        modelPage,
+        {
+            [assetId]: { type: 'MODEL', url: 'https://example.test/model.glb' },
+        },
+        new AbortController().signal,
+        hooks,
+        {
+            background: false,
+            bytes: new AssetCache(async () => triangleGLB()),
+        },
+    );
+    try {
+        const node = scene.nodes.get(spec.id);
+        node.clips.push(new AnimationClip('Open', 0.2, []));
+        scene.start();
+        scene.update(0, new PerspectiveCamera());
+        assert.equal(scene.needsFrame(), false);
+        scene.suspend();
+        scene.advanceHiddenAnimations(0.3);
+        assert.equal(node.mixer.time, 0);
+        scene.resume();
+        scene.advanceHiddenAnimations(0.3);
+        await new Promise(setImmediate);
+        assert.equal(node.root.visible, true);
+        assert.equal(scene.needsFrame(), true);
+    } finally {
+        scene.dispose();
+    }
+});
 
 test('two page runtimes reuse a model file but parse independent geometry and release the old scene', async () => {
     let requests = 0;
@@ -253,5 +341,32 @@ test('information card images share file bytes but own resized canvases and clos
             if (value === undefined) delete globalThis[key];
             else globalThis[key] = value;
         }
+    }
+});
+
+test('model loading bounds actual bytes at 10 MiB with and without the shared cache', async () => {
+    assert.equal(MODEL_MAX_DOWNLOAD_BYTES, 10 * 1024 * 1024);
+    const previous = globalThis.fetch;
+    const oversized = new Uint8Array(MODEL_MAX_DOWNLOAD_BYTES + 1);
+    const assets = {
+        [assetId]: { type: 'MODEL', url: 'https://example.test/oversized.glb', size: 1 },
+    };
+    try {
+        globalThis.fetch = async () => new Response(oversized);
+        const cache = new AssetCache(async (_url, _signal, limit) => {
+            assert.equal(limit, MODEL_MAX_DOWNLOAD_BYTES);
+            return oversized.buffer;
+        });
+        for (const bytes of [undefined, cache]) {
+            await assert.rejects(
+                buildScene(page('model'), assets, new AbortController().signal, hooks, {
+                    background: false,
+                    bytes,
+                }),
+                /giới hạn/,
+            );
+        }
+    } finally {
+        globalThis.fetch = previous;
     }
 });

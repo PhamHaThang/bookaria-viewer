@@ -207,6 +207,8 @@ test('changing book cancels the old load and leaving preview removes its expirat
     page,
     baseURL,
 }) => {
+    // Test expiry cleanup within 1.8 seconds independently of the decorative loading cycle.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     const fixture = await install(page, baseURL, { hold: 'alpha', expiresIn: 1800 });
     await page.goto('/b/alpha/p/1');
     await expect.poll(fixture.waiting).toBe(true);
