@@ -3,7 +3,7 @@ import { LIMITS } from './shared/contracts/common.schema';
 import type { ManifestPage } from './shared/contracts/manifest.schema';
 import { reportBook, reportDeviceId } from './shared/reports';
 
-export function installReportForm(slug: string, pages: ManifestPage[]) {
+export function installReportForm(slug: string, versionId: string, pages: ManifestPage[]) {
     const form = document.getElementById('report-form') as HTMLFormElement;
     const section = document.getElementById('report-section') as HTMLElement;
     const menu = document.getElementById('report-menu') as HTMLButtonElement;
@@ -42,6 +42,7 @@ export function installReportForm(slug: string, pages: ManifestPage[]) {
         const body = ReportBookBodySchema.safeParse({
             reason: values.get('reason'),
             note: values.get('note') || undefined,
+            versionId,
             pageId: values.get('pageId') || undefined,
             deviceId: reportDeviceId(storage),
         });

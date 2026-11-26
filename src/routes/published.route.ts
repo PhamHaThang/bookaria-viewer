@@ -141,7 +141,7 @@ export class PublishedRouteManager {
                 });
                 this.readingEvents = startReadingEvents(info.version.id);
                 this.viewer.setReadingEvents(this.readingEvents);
-                this.disposeReport = installReportForm(slug, manifest.pages);
+                this.disposeReport = installReportForm(slug, info.version.id, manifest.pages);
 
                 this.viewer.getUI().metadata(info);
                 get('publication-description').textContent = info.description || '';
