@@ -30,6 +30,7 @@ export function createExternalLinkDialog() {
                 return false;
             }
             if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+            if (url.username || url.password) return false;
             link.href = url.href;
             host.textContent = url.host;
             address.textContent = url.href;
