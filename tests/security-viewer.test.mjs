@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { PreviewMessageSchema, RunMessageSchema, trustedMessage } from '../src/shared/protocol.ts';
 import { ManifestSchema } from '../src/shared/contracts/manifest.schema.ts';
+import { PreviewMessageSchema, RunMessageSchema, trustedMessage } from '../src/shared/protocol.ts';
 import { publicBookSchemaCheck } from './security-viewer-helper.mjs';
 
 function collectSourceFiles(dir) {
@@ -18,7 +18,8 @@ function collectSourceFiles(dir) {
 
 test('SEC-VW-01 (Viewer): Viewer src/ has no raw HTML injection sinks (innerHTML / outerHTML / document.write)', () => {
     const files = collectSourceFiles(path.resolve(import.meta.dirname, '../src'));
-    const sinkPattern = /\b(innerHTML|outerHTML|insertAdjacentHTML|dangerouslySetInnerHTML)\b|document\.write\s*\(/;
+    const sinkPattern =
+        /\b(innerHTML|outerHTML|insertAdjacentHTML|dangerouslySetInnerHTML)\b|document\.write\s*\(/;
     const hits = [];
     for (const file of files) {
         const text = fs.readFileSync(file, 'utf8');
