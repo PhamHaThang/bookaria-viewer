@@ -105,8 +105,7 @@ export function parseEventBatch(input: unknown): { batch: EventBatchBody; droppe
 export const ReportBookBodySchema = z.object({
     reason: ReportReasonSchema,
     note: z.string().trim().max(LIMITS.reportNoteChars).optional(),
-    /** Published version and page displayed by the viewer. */
-    versionId: IdSchema.optional(),
+    /** Which page the problem is on (shown to the moderator; not a database column). */
     pageId: IdSchema.optional(),
     deviceId: z.string().min(8).max(100),
 });

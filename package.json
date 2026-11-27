@@ -16,7 +16,8 @@
         "contract:check": "node scripts/sync-contract.mjs --check",
         "contract:verify": "node scripts/sync-contract.mjs --verify",
         "vendor:verify": "node scripts/verify-vendor.mjs",
-        "test:ar": "playwright test --config=playwright.ar.config.mjs"
+        "test:ar": "playwright test --config=playwright.ar.config.mjs",
+        "test:online": "playwright test --config=playwright.online.config.mjs"
     },
     "dependencies": {
         "@fontsource/be-vietnam-pro": "5.3.0",

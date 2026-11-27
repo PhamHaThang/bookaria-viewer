@@ -106,7 +106,12 @@ export function checkUploadRequest(req: {
                 'IMAGE',
             );
         case 'MARKER_MIND':
-            return sized(hasExt(req.fileName, '.mind') && MIND_MIME.has(mime), 5 * MB, 'raw', null);
+            return sized(
+                hasExt(req.fileName, '.mind') && MIND_MIME.has(mime),
+                5 * MB,
+                'raw',
+                null,
+            );
     }
 }
 

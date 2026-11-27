@@ -32,7 +32,6 @@ import {
     MarkerWarningSchema,
     PageWidthMmSchema,
 } from './marker.schema';
-import { MarkerAnalysisMetricsSchema } from './marker-analysis.schema';
 import { PageSettingsSchema, SceneSchema, WorkflowVariablesSchema } from './scene.schema';
 
 export const UserRefSchema = z.object({
@@ -263,16 +262,11 @@ export const AuditLogSchema = z.object({
 });
 export type AuditLog = z.infer<typeof AuditLogSchema>;
 
-export const BookariaMarkerAssessmentSchema = MarkerAnalysisMetricsSchema.extend({
-    assessedAt: IsoDateTimeSchema,
-});
-export type BookariaMarkerAssessment = z.infer<typeof BookariaMarkerAssessmentSchema>;
-
 export const BookariaMarkerSchema = z.object({
     id: IdSchema,
     number: z.int().positive(),
     imageUrl: HttpUrlSchema,
-    assessment: BookariaMarkerAssessmentSchema.nullable().default(null),
+    markerScore: MarkerScoreSchema.nullable(),
     isActive: z.boolean(),
     validatedAt: IsoDateTimeSchema.nullable(),
 });
