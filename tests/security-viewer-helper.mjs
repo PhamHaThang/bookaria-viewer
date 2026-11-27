@@ -10,7 +10,11 @@ export function publicBookSchemaCheck() {
         language: 'vi',
         ageMin: null,
         ageMax: null,
-        version: { id: '22222222-2222-4222-8222-222222222222', versionNo: 1, publishedAt: '2026-11-26T00:00:00Z' },
+        version: {
+            id: '22222222-2222-4222-8222-222222222222',
+            versionNo: 1,
+            publishedAt: '2026-11-26T00:00:00Z',
+        },
         manifestUrl: 'javascript:void(0)',
         pageCount: 1,
         arPageCount: 0,
